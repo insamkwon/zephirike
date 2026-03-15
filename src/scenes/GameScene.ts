@@ -2317,7 +2317,7 @@ export class GameScene extends Phaser.Scene {
 
     // Stats panel section
     const statsY = titleY + 100;
-    const statsPanelHeight = 220;
+    const statsPanelHeight = 320; // 높이 증가 (더 많은 정보 표시)
 
     // Stats background panel
     const statsBg = this.add.graphics();
@@ -2450,11 +2450,62 @@ export class GameScene extends Phaser.Scene {
     killText.setOrigin(0.5);
     this.pausePanel.add(killText);
 
-    // Weapon section
-    const weaponY = statsY + statsPanelHeight + 25;
+    // Damage & Attack Speed section
+    const statsY2 = killY + 40;
     const currentWeapon = this.player?.getCurrentWeapon() || 'projectile';
     const weaponIcon = currentWeapon === 'projectile' ? '🏹' : '⚔️';
     const weaponName = currentWeapon === 'projectile' ? 'Spirit Bow' : 'Shadow Blade';
+    const damage = this.player ? Math.round(this.player.getTotalDamage(currentWeapon)) : 0;
+    const attackSpeed = this.player ? Math.round(this.player.getTotalAttackSpeed(currentWeapon) * 10) / 10 : 1;
+
+    // Weapon stats label
+    const weaponStatsLabel = this.add.text(
+      0,
+      statsY2,
+      `${weaponIcon} ${weaponName} STATS`,
+      {
+        fontSize: '12px',
+        color: '#9a8a6a',
+        fontFamily: '"Courier New", monospace',
+        fontStyle: 'bold',
+        letterSpacing: 2
+      }
+    );
+    weaponStatsLabel.setOrigin(0.5);
+    this.pausePanel.add(weaponStatsLabel);
+
+    // Damage stat
+    const damageText = this.add.text(
+      -panelWidth / 4 - 10,
+      statsY2 + 30,
+      `⚔ DAMAGE: ${damage}`,
+      {
+        fontSize: '14px',
+        color: '#ff6666',
+        fontFamily: '"Courier New", monospace',
+        fontStyle: 'bold'
+      }
+    );
+    damageText.setOrigin(0.5);
+    this.pausePanel.add(damageText);
+
+    // Attack Speed stat
+    const speedText = this.add.text(
+      panelWidth / 4 + 10,
+      statsY2 + 30,
+      `⚡ SPEED: ${attackSpeed}/s`,
+      {
+        fontSize: '14px',
+        color: '#66ccff',
+        fontFamily: '"Courier New", monospace',
+        fontStyle: 'bold'
+      }
+    );
+    speedText.setOrigin(0.5);
+    this.pausePanel.add(speedText);
+
+    // Weapon section (reuse variables from above)
+    const weaponY = statsY + statsPanelHeight + 25;
 
     const weaponPanel = this.add.container(0, weaponY);
 

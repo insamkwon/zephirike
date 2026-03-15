@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HighScoreManager } from '../systems/HighScoreManager';
 
 /**
  * Main Menu Scene - Game start screen
@@ -9,6 +10,8 @@ export class MenuScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
   private promptText!: Phaser.GameObjects.Text;
   private titleContainer!: Phaser.GameObjects.Container;
+  private rankingPanel!: Phaser.GameObjects.Container;
+  private isRankingVisible: boolean = false;
 
   constructor() {
     super({ key: 'MenuScene' });
@@ -201,6 +204,221 @@ export class MenuScene extends Phaser.Scene {
     // 엔터키로도 시작
     this.input.keyboard!.on('keydown-ENTER', () => {
       this.startGame();
+    });
+
+    // H 키로 랭킹 토글
+    this.input.keyboard!.on('keydown-H', () => {
+      this.toggleRanking();
+    });
+
+    // 랭킹 표시 버튼 (하단 우측)
+    this.createRankingButton(width, height);
+  }
+
+  /**
+   * 랭킹 버튼 생성
+   */
+  private createRankingButton(width: number, height: number): void {
+    const buttonX = width - 100;
+    const buttonY = height - 40;
+
+    const buttonBg = this.add.graphics();
+    buttonBg.fillStyle(0x1a1a2e, 0.8);
+    buttonBg.fillRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+    buttonBg.lineStyle(2, 0x8b6914, 0.6);
+    buttonBg.strokeRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+    buttonBg.setDepth(100);
+
+    const buttonText = this.add.text(buttonX, buttonY, '🏆 RANKING (H)', {
+      fontSize: '14px',
+      color: '#d4af37',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    buttonText.setOrigin(0.5);
+    buttonText.setDepth(101);
+
+    const rankingButton = this.add.container(buttonX, buttonY);
+    rankingButton.add([buttonBg, buttonText]);
+    rankingButton.setSize(120, 36);
+    rankingButton.setDepth(102);
+
+    (rankingButton as any).setInteractive({ useHandCursor: true })
+      .on('pointerover', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x2a2a3e, 0.9);
+        buttonBg.fillRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+        buttonBg.lineStyle(2, 0xd4af37, 1);
+        buttonBg.strokeRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+        buttonText.setColor('#f4e4c1');
+      })
+      .on('pointerout', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x1a1a2e, 0.8);
+        buttonBg.fillRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+        buttonBg.lineStyle(2, 0x8b6914, 0.6);
+        buttonBg.strokeRoundedRect(buttonX - 60, buttonY - 18, 120, 36, 18);
+        buttonText.setColor('#d4af37');
+      })
+      .on('pointerdown', () => {
+        this.toggleRanking();
+      });
+  }
+
+  /**
+   * 랭킹 토글
+   */
+  private toggleRanking(): void {
+    if (this.isRankingVisible) {
+      this.hideRanking();
+    } else {
+      this.showRanking();
+    }
+  }
+
+  /**
+   * 랭킹 표시
+   */
+  private showRanking(): void {
+    if (this.isRankingVisible) return;
+
+    const { width, height } = this.cameras.main;
+    const scores = HighScoreManager.loadHighScores();
+
+    // 오버레이
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, width, height);
+    overlay.setDepth(200);
+
+    // 패널
+    const panelWidth = 500;
+    const panelHeight = scores.length > 0 ? 250 + scores.length * 50 : 250;
+    const panelY = height / 2;
+
+    const panelBg = this.add.graphics();
+    panelBg.fillStyle(0x1a1a2e, 0.95);
+    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 20);
+
+    // 보더
+    panelBg.lineStyle(3, 0x8b6914, 0.8);
+    panelBg.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 20);
+
+    // 상단 장식 바
+    panelBg.fillStyle(0x8b6914, 1);
+    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, 6, { tl: 20, tr: 20, bl: 0, br: 0 });
+
+    // 패널 컨테이너
+    this.rankingPanel = this.add.container(width / 2, panelY);
+    this.rankingPanel.setDepth(201);
+    this.rankingPanel.add([overlay, panelBg]);
+
+    // 타이틀
+    const title = this.add.text(0, -panelHeight / 2 + 45, '🏆 하이 스코어 랭킹', {
+      fontSize: '24px',
+      color: '#f4e4c1',
+      fontFamily: '"Georgia", serif',
+      fontStyle: 'bold',
+      stroke: '#1a1a1a',
+      strokeThickness: 4
+    });
+    title.setOrigin(0.5);
+    this.rankingPanel.add(title);
+
+    if (scores.length === 0) {
+      const noScores = this.add.text(0, 0, '아직 기록이 없습니다', {
+        fontSize: '16px',
+        color: '#9a8a6a',
+        fontFamily: '"Courier New", monospace'
+      });
+      noScores.setOrigin(0.5);
+      this.rankingPanel.add(noScores);
+    } else {
+      scores.forEach((score, index) => {
+        const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+        const medal = medals[index] || '🏅';
+
+        const entryBg = this.add.graphics();
+        entryBg.fillStyle(index % 2 === 0 ? 0x1a1a2e : 0x0f0f1a, 0.5);
+        entryBg.fillRoundedRect(-panelWidth / 2 + 30, -panelHeight / 2 + 90 + index * 45, panelWidth - 60, 40, 8);
+        this.rankingPanel.add(entryBg);
+
+        const rankText = this.add.text(-panelWidth / 2 + 50, -panelHeight / 2 + 90 + index * 45, `${medal}`, {
+          fontSize: '24px'
+        });
+        this.rankingPanel.add(rankText);
+
+        const scoreText = this.add.text(0, -panelHeight / 2 + 90 + index * 45, `${score.score.toLocaleString()} 점`, {
+          fontSize: '18px',
+          color: '#f4e4c1',
+          fontFamily: '"Courier New", monospace',
+          fontStyle: 'bold'
+        });
+        scoreText.setOrigin(0.5);
+        this.rankingPanel.add(scoreText);
+
+        const dateText = this.add.text(panelWidth / 2 - 50, -panelHeight / 2 + 90 + index * 45, score.formattedDate, {
+          fontSize: '12px',
+          color: '#6a6a5a',
+          fontFamily: '"Courier New", monospace'
+        });
+        dateText.setOrigin(1, 0.5);
+        this.rankingPanel.add(dateText);
+      });
+    }
+
+    // 닫기 힌트
+    const hint = this.add.text(0, panelHeight / 2 - 30, 'H 또는 ESC로 닫기', {
+      fontSize: '14px',
+      color: '#6a6a5a',
+      fontFamily: '"Courier New", monospace'
+    });
+    hint.setOrigin(0.5);
+    this.rankingPanel.add(hint);
+
+    // 페이드인
+    this.rankingPanel.setScale(0.8);
+    this.rankingPanel.setAlpha(0);
+
+    this.tweens.add({
+      targets: this.rankingPanel,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 300,
+      ease: Phaser.Math.Easing.Back.Out
+    });
+
+    this.isRankingVisible = true;
+
+    // ESC로 닫기
+    const escHandler = () => {
+      if (this.isRankingVisible) {
+        this.hideRanking();
+      }
+    };
+    this.input.keyboard!.once('keydown-ESC', escHandler);
+    this.input.keyboard!.once('keydown-H', escHandler);
+  }
+
+  /**
+   * 랭킹 숨김
+   */
+  private hideRanking(): void {
+    if (!this.isRankingVisible || !this.rankingPanel) return;
+
+    this.tweens.add({
+      targets: this.rankingPanel,
+      scaleX: 0.8,
+      scaleY: 0.8,
+      alpha: 0,
+      duration: 200,
+      ease: Phaser.Math.Easing.Back.In,
+      onComplete: () => {
+        this.rankingPanel.destroy();
+        this.rankingPanel = null as any;
+        this.isRankingVisible = false;
+      }
     });
   }
 
