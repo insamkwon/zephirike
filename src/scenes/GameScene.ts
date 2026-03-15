@@ -780,7 +780,20 @@ export class GameScene extends Phaser.Scene {
         this.handleGameOverRestart();
       }
     });
+
+    // Browser visibility change - auto pause when tab becomes inactive
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
+
+  /**
+   * 브라우저 탭 비활성화 감지
+   */
+  private handleVisibilityChange = (): void => {
+    if (document.hidden && this.isGameActive && !this.isPaused) {
+      // 탭이 비활성화되면 자동 일시정지
+      this.pauseGame();
+    }
+  };
 
   private createBackground(): void {
     // Set much brighter background color for maximum contrast with obstacles
@@ -2100,6 +2113,8 @@ export class GameScene extends Phaser.Scene {
     if (this.weaponModal) {
       this.weaponModal.destroy();
     }
+    // 이벤트 리스너 제거
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   // ==================== PAUSE SYSTEM ====================
@@ -2144,219 +2159,407 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 일시정지 UI 표시
+   * 일시정지 UI 표시 - Dark Fantasy Glassmorphism Design
    */
   private showPauseUI(): void {
     const { width, height } = this.cameras.main;
 
-    // Dim overlay
+    // Blur effect on game (using Phaser's built-in post-processing would be ideal, but using overlay for compatibility)
     const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.7);
+
+    // Create vignette effect gradient
+    overlay.fillGradientStyle(0, 0, 0, 0, 0.6, 0.7, 0.75, 0.85);
+    overlay.fillRect(0, 0, width, height);
+
+    // Add subtle blue tint for fantasy atmosphere
+    overlay.fillStyle(0x1a1a3a, 0.3);
     overlay.fillRect(0, 0, width, height);
     overlay.setDepth(500);
 
-    // Pause panel container
-    const panelWidth = 500;
-    const panelHeight = 550;
+    // Create decorative border pattern
+    const borderPattern = this.add.graphics();
+    borderPattern.lineStyle(2, 0x4a3c2a, 0.5);
+    const borderSpacing = 40;
+    for (let x = 0; x < width; x += borderSpacing) {
+      borderPattern.lineBetween(x, 0, x, height);
+    }
+    for (let y = 0; y < height; y += borderSpacing) {
+      borderPattern.lineBetween(0, y, width, y);
+    }
+    borderPattern.setAlpha(0.15);
+    borderPattern.setDepth(501);
+
+    // Main panel container
+    const panelWidth = 580;
+    const panelHeight = 620;
     this.pausePanel = this.add.container(width / 2, height / 2);
-    this.pausePanel.setDepth(501);
+    this.pausePanel.setDepth(502);
 
-    // Panel background
+    // Glassmorphism panel background
     const panelBg = this.add.graphics();
-    panelBg.fillStyle(0x1a1a2e, 0.95);
-    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
 
-    // Border
-    panelBg.lineStyle(3, 0x6366f1, 1);
-    panelBg.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
+    // Main panel body with gradient
+    panelBg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1a, 0x0f0f1a, 0.92);
+    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 24);
 
-    // Top accent bar (purple)
-    panelBg.fillStyle(0x6366f1, 1);
-    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, 6, { tl: 16, tr: 16, bl: 0, br: 0 });
+    // Inner glow effect (lighter border)
+    panelBg.lineStyle(2, 0x8b7355, 0.4);
+    panelBg.strokeRoundedRect(-panelWidth / 2 + 4, -panelHeight / 2 + 4, panelWidth - 8, panelHeight - 8, 20);
+
+    // Outer border (gold-bronze)
+    panelBg.lineStyle(3, 0x8b6914, 0.8);
+    panelBg.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 24);
+
+    // Corner decorations (ornate corners)
+    const cornerSize = 30;
+    const cornerOffset = 8;
+
+    // Top-left corner
+    panelBg.lineStyle(3, 0xd4af37, 1);
+    panelBg.beginPath();
+    panelBg.moveTo(-panelWidth / 2 + cornerOffset, -panelHeight / 2 + cornerSize);
+    panelBg.lineTo(-panelWidth / 2 + cornerOffset, -panelHeight / 2 + cornerOffset);
+    panelBg.lineTo(-panelWidth / 2 + cornerSize, -panelHeight / 2 + cornerOffset);
+    panelBg.strokePath();
+
+    // Top-right corner
+    panelBg.beginPath();
+    panelBg.moveTo(panelWidth / 2 - cornerOffset, -panelHeight / 2 + cornerSize);
+    panelBg.lineTo(panelWidth / 2 - cornerOffset, -panelHeight / 2 + cornerOffset);
+    panelBg.lineTo(panelWidth / 2 - cornerSize, -panelHeight / 2 + cornerOffset);
+    panelBg.strokePath();
+
+    // Bottom-left corner
+    panelBg.beginPath();
+    panelBg.moveTo(-panelWidth / 2 + cornerOffset, panelHeight / 2 - cornerSize);
+    panelBg.lineTo(-panelWidth / 2 + cornerOffset, panelHeight / 2 - cornerOffset);
+    panelBg.lineTo(-panelWidth / 2 + cornerSize, panelHeight / 2 - cornerOffset);
+    panelBg.strokePath();
+
+    // Bottom-right corner
+    panelBg.beginPath();
+    panelBg.moveTo(panelWidth / 2 - cornerOffset, panelHeight / 2 - cornerSize);
+    panelBg.lineTo(panelWidth / 2 - cornerOffset, panelHeight / 2 - cornerOffset);
+    panelBg.lineTo(panelWidth / 2 - cornerSize, panelHeight / 2 - cornerOffset);
+    panelBg.strokePath();
 
     this.pausePanel.add(panelBg);
 
-    // PAUSED title
+    // Title section with "runes" decoration
+    const titleY = -panelHeight / 2 + 65;
+
+    // Decorative line above title
+    const titleLineTop = this.add.graphics();
+    titleLineTop.lineStyle(2, 0x8b6914, 0.8);
+    titleLineTop.lineBetween(-80, titleY - 45, 80, titleY - 45);
+    this.pausePanel.add(titleLineTop);
+
+    // Rune symbols on sides
+    const runeLeft = this.add.text(-panelWidth / 2 + 35, titleY - 5, '⚔', {
+      fontSize: '24px',
+      color: '#8b6914'
+    });
+    runeLeft.setOrigin(0.5);
+    this.pausePanel.add(runeLeft);
+
+    const runeRight = this.add.text(panelWidth / 2 - 35, titleY - 5, '⚔', {
+      fontSize: '24px',
+      color: '#8b6914'
+    });
+    runeRight.setOrigin(0.5);
+    this.pausePanel.add(runeRight);
+
+    // Main title with fantasy styling
     const pausedTitle = this.add.text(
       0,
-      -panelHeight / 2 + 50,
+      titleY,
       'PAUSED',
       {
-        fontSize: '48px',
-        color: '#e0e7ff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontSize: '56px',
+        color: '#f4e4c1',
+        fontFamily: '"Georgia", "Times New Roman", serif',
         fontStyle: 'bold',
         align: 'center',
-        stroke: '#312e81',
-        strokeThickness: 6,
+        stroke: '#1a1a1a',
+        strokeThickness: 8,
         shadow: {
           offsetX: 0,
-          offsetY: 4,
+          offsetY: 6,
           color: '#000000',
-          blur: 8
+          blur: 12
         }
       }
     );
     pausedTitle.setOrigin(0.5);
     this.pausePanel.add(pausedTitle);
 
-    // Stats section - Wave, Time, Level
+    // Subtitle with glow effect
+    const pausedSubtitle = this.add.text(
+      0,
+      titleY + 40,
+      '⚸ GAME PAUSED ⚸',
+      {
+        fontSize: '16px',
+        color: '#9a8a6a',
+        fontFamily: '"Courier New", monospace',
+        fontStyle: 'bold',
+        letterSpacing: 8
+      }
+    );
+    pausedSubtitle.setOrigin(0.5);
+    this.pausePanel.add(pausedSubtitle);
+
+    // Decorative line below title
+    const titleLineBottom = this.add.graphics();
+    titleLineBottom.lineStyle(2, 0x8b6914, 0.8);
+    titleLineBottom.lineBetween(-80, titleY + 65, 80, titleY + 65);
+    this.pausePanel.add(titleLineBottom);
+
+    // Stats panel section
+    const statsY = titleY + 100;
+    const statsPanelHeight = 220;
+
+    // Stats background panel
+    const statsBg = this.add.graphics();
+    statsBg.fillStyle(0x0a0a12, 0.6);
+    statsBg.fillRoundedRect(-panelWidth / 2 + 30, statsY, panelWidth - 60, statsPanelHeight, 12);
+    statsBg.lineStyle(1, 0x3a3a4a, 0.5);
+    statsBg.strokeRoundedRect(-panelWidth / 2 + 30, statsY, panelWidth - 60, statsPanelHeight, 12);
+    this.pausePanel.add(statsBg);
+
+    // Game stats header
     const gameTime = this.formatTime(this.time.now - this.gameStartTime);
-    const statsText = this.add.text(
+    const statsHeader = this.add.text(
       0,
-      -panelHeight / 2 + 120,
-      `Wave ${this.currentWave}    |    ${gameTime}    |    Lv.${this.player?.getLevel() || 1}`,
-      {
-        fontSize: '18px',
-        color: '#94a3b8',
-        fontFamily: 'monospace',
-        fontStyle: 'bold'
-      }
-    );
-    statsText.setOrigin(0.5);
-    this.pausePanel.add(statsText);
-
-    // Separator
-    const sep1 = this.add.graphics();
-    sep1.lineStyle(1, 0x374151, 0.8);
-    sep1.lineBetween(-panelWidth / 2 + 40, -panelHeight / 2 + 160, panelWidth / 2 - 40, -panelHeight / 2 + 160);
-    this.pausePanel.add(sep1);
-
-    // Current stats section
-    const statsY = -panelHeight / 2 + 200;
-
-    // HP
-    const hpPercent = this.player ? Math.round((this.player.getHp() / this.player.getMaxHp()) * 100) : 0;
-    const hpColor = hpPercent < 30 ? '#ef4444' : hpPercent < 60 ? '#f59e0b' : '#22c55e';
-    const hpBar = `█`.repeat(Math.floor(hpPercent / 5)) + `░`.repeat(20 - Math.floor(hpPercent / 5));
-    const hpText = this.add.text(
-      -panelWidth / 2 + 40,
-      statsY,
-      `HP:   ${hpBar} ${this.player?.getHp() || 0}/${this.player?.getMaxHp() || 100}`,
-      {
-        fontSize: '16px',
-        color: hpColor,
-        fontFamily: 'monospace',
-        fontStyle: 'bold'
-      }
-    );
-    hpText.setOrigin(0, 0);
-    this.pausePanel.add(hpText);
-
-    // EXP
-    const currentExp = this.player?.getExperience() || 0;
-    const expToLevel = this.player?.getExperienceToNextLevel() || 100;
-    const expPercent = Math.round((currentExp / expToLevel) * 100);
-    const expBar = `█`.repeat(Math.floor(expPercent / 5)) + `░`.repeat(20 - Math.floor(expPercent / 5));
-    const expText = this.add.text(
-      -panelWidth / 2 + 40,
-      statsY + 35,
-      `EXP:  ${expBar} ${currentExp}/${expToLevel}`,
-      {
-        fontSize: '16px',
-        color: '#60a5fa',
-        fontFamily: 'monospace',
-        fontStyle: 'bold'
-      }
-    );
-    expText.setOrigin(0, 0);
-    this.pausePanel.add(expText);
-
-    // Kill count
-    const killText = this.add.text(
-      -panelWidth / 2 + 40,
-      statsY + 70,
-      `KILLS: ${this.score.toLocaleString()}`,
-      {
-        fontSize: '16px',
-        color: '#fbbf24',
-        fontFamily: 'monospace',
-        fontStyle: 'bold'
-      }
-    );
-    killText.setOrigin(0, 0);
-    this.pausePanel.add(killText);
-
-    // Separator 2
-    const sep2 = this.add.graphics();
-    sep2.lineStyle(1, 0x374151, 0.8);
-    sep2.lineBetween(-panelWidth / 2 + 40, statsY + 115, panelWidth / 2 - 40, statsY + 115);
-    this.pausePanel.add(sep2);
-
-    // Active weapons
-    const weaponY = statsY + 145;
-    const weaponLabel = this.add.text(
-      0,
-      weaponY,
-      'ACTIVE WEAPONS',
+      statsY + 20,
+      `━━━ WAVE ${this.currentWave} ━━━ ${gameTime} ━━━ LV.${this.player?.getLevel() || 1} ━━`,
       {
         fontSize: '14px',
-        color: '#9ca3af',
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        color: '#8b7355',
+        fontFamily: '"Courier New", monospace',
         fontStyle: 'bold',
         letterSpacing: 2
       }
     );
-    weaponLabel.setOrigin(0.5);
-    this.pausePanel.add(weaponLabel);
+    statsHeader.setOrigin(0.5);
+    this.pausePanel.add(statsHeader);
 
-    // Weapon icons (simple text representation)
+    // HP Bar with fancy design
+    const hpY = statsY + 60;
+    const hpPercent = this.player ? Math.round((this.player.getHp() / this.player.getMaxHp()) * 100) : 0;
+    const hpColor = hpPercent < 30 ? 0xff3333 : hpPercent < 60 ? 0xffaa33 : 0x33cc66;
+    const hpBarWidth = panelWidth - 100;
+
+    // HP label
+    const hpLabel = this.add.text(-panelWidth / 2 + 50, hpY - 15, 'HP', {
+      fontSize: '12px',
+      color: '#9a8a6a',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    hpLabel.setOrigin(0, 0.5);
+    this.pausePanel.add(hpLabel);
+
+    // HP value
+    const hpValue = this.add.text(panelWidth / 2 - 50, hpY - 15, `${this.player?.getHp() || 0}/${this.player?.getMaxHp() || 100}`, {
+      fontSize: '12px',
+      color: '#e0d0b0',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    hpValue.setOrigin(1, 0.5);
+    this.pausePanel.add(hpValue);
+
+    // HP bar background
+    const hpBarBg = this.add.graphics();
+    hpBarBg.fillStyle(0x1a1a1a, 1);
+    hpBarBg.fillRoundedRect(-hpBarWidth / 2, hpY, hpBarWidth, 12, 6);
+    this.pausePanel.add(hpBarBg);
+
+    // HP bar fill with gradient effect
+    const hpBarFill = this.add.graphics();
+    hpBarFill.fillStyle(hpColor, 1);
+    hpBarFill.fillRoundedRect(-hpBarWidth / 2, hpY, hpBarWidth * (hpPercent / 100), 12, 6);
+    this.pausePanel.add(hpBarFill);
+
+    // HP bar glow
+    const hpBarGlow = this.add.graphics();
+    hpBarGlow.fillStyle(hpColor, 0.3);
+    hpBarGlow.fillRoundedRect(-hpBarWidth / 2, hpY - 2, hpBarWidth * (hpPercent / 100), 16, 8);
+    this.pausePanel.add(hpBarGlow);
+
+    // EXP Bar
+    const expY = hpY + 35;
+    const currentExp = this.player?.getExperience() || 0;
+    const expToLevel = this.player?.getExperienceToNextLevel() || 100;
+    const expPercent = Math.round((currentExp / expToLevel) * 100);
+
+    // EXP label
+    const expLabel = this.add.text(-panelWidth / 2 + 50, expY - 15, 'EXP', {
+      fontSize: '12px',
+      color: '#9a8a6a',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    expLabel.setOrigin(0, 0.5);
+    this.pausePanel.add(expLabel);
+
+    // EXP value
+    const expValue = this.add.text(panelWidth / 2 - 50, expY - 15, `${currentExp}/${expToLevel}`, {
+      fontSize: '12px',
+      color: '#e0d0b0',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    expValue.setOrigin(1, 0.5);
+    this.pausePanel.add(expValue);
+
+    // EXP bar background
+    const expBarBg = this.add.graphics();
+    expBarBg.fillStyle(0x1a1a1a, 1);
+    expBarBg.fillRoundedRect(-hpBarWidth / 2, expY, hpBarWidth, 12, 6);
+    this.pausePanel.add(expBarBg);
+
+    // EXP bar fill (blue-magic color)
+    const expBarFill = this.add.graphics();
+    expBarFill.fillStyle(0x4488ff, 1);
+    expBarFill.fillRoundedRect(-hpBarWidth / 2, expY, hpBarWidth * (expPercent / 100), 12, 6);
+    this.pausePanel.add(expBarFill);
+
+    // EXP bar glow
+    const expBarGlow = this.add.graphics();
+    expBarGlow.fillStyle(0x4488ff, 0.3);
+    expBarGlow.fillRoundedRect(-hpBarWidth / 2, expY - 2, hpBarWidth * (expPercent / 100), 16, 8);
+    this.pausePanel.add(expBarGlow);
+
+    // Kill counter with fancy icon
+    const killY = expY + 40;
+    const killText = this.add.text(
+      0,
+      killY,
+      `💀 ENEMIES SLAIN: ${this.score.toLocaleString()}`,
+      {
+        fontSize: '16px',
+        color: '#f4e4c1',
+        fontFamily: '"Georgia", serif',
+        fontStyle: 'bold',
+        stroke: '#1a1a1a',
+        strokeThickness: 4
+      }
+    );
+    killText.setOrigin(0.5);
+    this.pausePanel.add(killText);
+
+    // Weapon section
+    const weaponY = statsY + statsPanelHeight + 25;
     const currentWeapon = this.player?.getCurrentWeapon() || 'projectile';
-    const weaponName = currentWeapon === 'projectile' ? '🏹 Bow (Projectile)' : '⚔️ Sword (Melee)';
-    const weaponIcons = this.add.text(
-      0,
-      weaponY + 35,
-      `Active: ${weaponName}\nPress TAB to switch`,
-      {
-        fontSize: '18px',
-        color: '#e0e7ff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-        align: 'center',
-        fontStyle: 'bold'
-      }
-    );
-    weaponIcons.setOrigin(0.5);
-    this.pausePanel.add(weaponIcons);
+    const weaponIcon = currentWeapon === 'projectile' ? '🏹' : '⚔️';
+    const weaponName = currentWeapon === 'projectile' ? 'Spirit Bow' : 'Shadow Blade';
 
-    // Resume instruction
-    const resumeText = this.add.text(
+    const weaponPanel = this.add.container(0, weaponY);
+
+    // Weapon background
+    const weaponBg = this.add.graphics();
+    weaponBg.fillStyle(0x0a0a12, 0.5);
+    weaponBg.fillRoundedRect(-150, -20, 300, 40, 20);
+    weaponBg.lineStyle(1, 0x3a3a4a, 0.5);
+    weaponBg.strokeRoundedRect(-150, -20, 300, 40, 20);
+    weaponPanel.add(weaponBg);
+
+    const weaponText = this.add.text(0, 0, `${weaponIcon} ${weaponName}`, {
+      fontSize: '18px',
+      color: '#e0d0b0',
+      fontFamily: '"Georgia", serif',
+      fontStyle: 'bold'
+    });
+    weaponText.setOrigin(0.5);
+    weaponPanel.add(weaponText);
+
+    const weaponHint = this.add.text(0, 22, 'Press TAB to switch', {
+      fontSize: '11px',
+      color: '#6a6a5a',
+      fontFamily: '"Courier New", monospace'
+    });
+    weaponHint.setOrigin(0.5);
+    weaponPanel.add(weaponHint);
+
+    this.pausePanel.add(weaponPanel);
+
+    // Action buttons section
+    const actionY = panelHeight / 2 - 70;
+
+    // Resume button styling
+    const resumeBtnBg = this.add.graphics();
+    resumeBtnBg.fillStyle(0x2a2a3a, 0.9);
+    resumeBtnBg.fillRoundedRect(-120, actionY - 20, 240, 40, 20);
+    resumeBtnBg.lineStyle(2, 0x4488ff, 1);
+    resumeBtnBg.strokeRoundedRect(-120, actionY - 20, 240, 40, 20);
+    this.pausePanel.add(resumeBtnBg);
+
+    const resumeBtnText = this.add.text(
       0,
-      panelHeight / 2 - 80,
-      'ESC or Click to Resume    |    Q to Quit',
+      actionY,
+      '▶ RESUME',
       {
-        fontSize: '14px',
-        color: '#6b7280',
+        fontSize: '16px',
+        color: '#88bbff',
         fontFamily: '"Courier New", monospace',
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        letterSpacing: 4
       }
     );
-    resumeText.setOrigin(0.5);
-    this.pausePanel.add(resumeText);
+    resumeBtnText.setOrigin(0.5);
+    this.pausePanel.add(resumeBtnText);
 
-    // Blink animation
+    // Quit hint
+    const quitText = this.add.text(
+      0,
+      panelHeight / 2 - 25,
+      'Press Q to return to menu',
+      {
+        fontSize: '12px',
+        color: '#6a6a5a',
+        fontFamily: '"Courier New", monospace'
+      }
+    );
+    quitText.setOrigin(0.5);
+    this.pausePanel.add(quitText);
+
+    // Subtle floating animation for the panel
     this.tweens.add({
-      targets: resumeText,
-      alpha: 0.4,
-      duration: 700,
+      targets: this.pausePanel,
+      y: height / 2 - 5,
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: Phaser.Math.Easing.Sine.InOut
+    });
+
+    // Pulse animation for resume button
+    this.tweens.add({
+      targets: [resumeBtnBg, resumeBtnText],
+      alpha: 0.7,
+      duration: 1000,
       yoyo: true,
       repeat: -1
     });
 
-    // Panel entrance animation
-    this.pausePanel.setScale(0.8);
+    // Panel entrance animation with scale and fade
+    this.pausePanel.setScale(0.5);
     this.pausePanel.setAlpha(0);
     this.tweens.add({
       targets: this.pausePanel,
       scaleX: 1,
       scaleY: 1,
       alpha: 1,
-      duration: 300,
+      duration: 400,
       ease: Phaser.Math.Easing.Back.Out
     });
 
     // Store overlay reference
     this.pauseOverlay = this.add.container(0, 0);
     this.pauseOverlay.add(overlay);
+    this.pauseOverlay.add(borderPattern);
     this.pauseOverlay.add(this.pausePanel);
     this.pauseOverlay.setDepth(500);
   }
