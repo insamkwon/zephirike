@@ -1796,7 +1796,7 @@ export class GameScene extends Phaser.Scene {
     const restartPrompt = this.add.text(
       0,
       panelHeight/2 - 25,
-      '화면 클릭 또는 스페이스바로 재시작',
+      '화면 클릭 또는 스페이스바로 처음 화면으로',
       {
         fontSize: '14px',
         color: '#6b7280',
@@ -1844,15 +1844,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 게임 오버 후 재시작 처리
+   * 게임 오버 후 시작 화면으로 이동
    */
   private handleGameOverRestart(): void {
     if (this.isRestarting) return;
 
     this.isRestarting = true;
 
-    // 즉시 재시작 - 지연 없이
-    this.scene.restart();
+    // 시작 화면으로 이동
+    this.scene.start('StartScene');
   }
 
   private openHighScores(): void {
