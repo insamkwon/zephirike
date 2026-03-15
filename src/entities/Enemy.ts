@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import { EnemyConfig, EnemyState, EnemyType, HitEvent, HitCallbackManager } from '../types/GameTypes';
 import { EnemyStateMachine } from './EnemyStateMachine';
 
-// 적 타입별 기본 설정 (난이도 조정됨)
+// 적 타입별 기본 설정 (난이도 조정됨 - 한방 사 방지)
 const ENEMY_STATS: Record<EnemyType, { size: number; speed: number; hp: number; damage: number }> = {
-  slime: { size: 32, speed: 60, hp: 35, damage: 10 }, // HP: 30→35, Damage: 8→10
-  skeleton: { size: 40, speed: 80, hp: 60, damage: 15 }, // HP: 50→60, Damage: 12→15
-  bat: { size: 36, speed: 120, hp: 30, damage: 8 } // HP: 25→30, Damage: 6→8
+  slime: { size: 32, speed: 60, hp: 60, damage: 10 }, // HP: 35→60 (약 2배)
+  skeleton: { size: 40, speed: 80, hp: 100, damage: 15 }, // HP: 60→100 (약 1.7배)
+  bat: { size: 36, speed: 120, hp: 50, damage: 8 } // HP: 30→50 (약 1.7배)
 };
 
 export class Enemy extends Phaser.GameObjects.Container {
