@@ -70,6 +70,11 @@ export class GameScene extends Phaser.Scene {
   // Game over restart flag
   private isRestarting: boolean = false;
 
+  // Pause system
+  private isPaused: boolean = false;
+  private pauseOverlay!: Phaser.GameObjects.Container;
+  private pausePanel!: Phaser.GameObjects.Container;
+
   constructor() {
     super({ key: 'GameScene' });
     // Groups will be initialized in create()
@@ -742,6 +747,18 @@ export class GameScene extends Phaser.Scene {
       this.openHighScores();
     });
 
+    // ESC key to toggle pause
+    this.input.keyboard!.on('keydown-ESC', () => {
+      this.togglePause();
+    });
+
+    // Q key to quit to menu (only when paused)
+    this.input.keyboard!.on('keydown-Q', () => {
+      if (this.isPaused) {
+        this.quitToMenu();
+      }
+    });
+
     // Game Over restart handlers - only work when game is NOT active
     const tryRestart = () => {
       if (!this.isGameActive && !this.isRestarting) {
@@ -755,6 +772,10 @@ export class GameScene extends Phaser.Scene {
 
     // Click to restart when game is over (check isGameActive in handler)
     this.input.on('pointerdown', () => {
+      if (this.isPaused) {
+        this.resumeGame();
+        return;
+      }
       if (!this.isGameActive && !this.isRestarting) {
         this.handleGameOverRestart();
       }
@@ -2020,6 +2041,7 @@ export class GameScene extends Phaser.Scene {
 
   update(): void {
     if (!this.isGameActive) return;
+    if (this.isPaused) return;
 
     // Update player with enemies for auto-targeting
     this.player.update(this.cursors, this.wasd, this.mousePointer, this.enemies);
@@ -2078,5 +2100,303 @@ export class GameScene extends Phaser.Scene {
     if (this.weaponModal) {
       this.weaponModal.destroy();
     }
+  }
+
+  // ==================== PAUSE SYSTEM ====================
+
+  /**
+   * 일시정지 토글
+   */
+  private togglePause(): void {
+    if (!this.isGameActive) return;
+
+    if (this.isPaused) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  /**
+   * 게임 일시정지
+   */
+  private pauseGame(): void {
+    if (this.isPaused) return;
+
+    this.isPaused = true;
+    this.physics.pause();
+
+    // Show pause UI
+    this.showPauseUI();
+  }
+
+  /**
+   * 게임 재개
+   */
+  private resumeGame(): void {
+    if (!this.isPaused) return;
+
+    this.isPaused = false;
+    this.physics.resume();
+
+    // Hide pause UI
+    this.hidePauseUI();
+  }
+
+  /**
+   * 일시정지 UI 표시
+   */
+  private showPauseUI(): void {
+    const { width, height } = this.cameras.main;
+
+    // Dim overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, width, height);
+    overlay.setDepth(500);
+
+    // Pause panel container
+    const panelWidth = 500;
+    const panelHeight = 550;
+    this.pausePanel = this.add.container(width / 2, height / 2);
+    this.pausePanel.setDepth(501);
+
+    // Panel background
+    const panelBg = this.add.graphics();
+    panelBg.fillStyle(0x1a1a2e, 0.95);
+    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
+
+    // Border
+    panelBg.lineStyle(3, 0x6366f1, 1);
+    panelBg.strokeRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, panelHeight, 16);
+
+    // Top accent bar (purple)
+    panelBg.fillStyle(0x6366f1, 1);
+    panelBg.fillRoundedRect(-panelWidth / 2, -panelHeight / 2, panelWidth, 6, { tl: 16, tr: 16, bl: 0, br: 0 });
+
+    this.pausePanel.add(panelBg);
+
+    // PAUSED title
+    const pausedTitle = this.add.text(
+      0,
+      -panelHeight / 2 + 50,
+      'PAUSED',
+      {
+        fontSize: '48px',
+        color: '#e0e7ff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontStyle: 'bold',
+        align: 'center',
+        stroke: '#312e81',
+        strokeThickness: 6,
+        shadow: {
+          offsetX: 0,
+          offsetY: 4,
+          color: '#000000',
+          blur: 8
+        }
+      }
+    );
+    pausedTitle.setOrigin(0.5);
+    this.pausePanel.add(pausedTitle);
+
+    // Stats section - Wave, Time, Level
+    const gameTime = this.formatTime(this.time.now - this.gameStartTime);
+    const statsText = this.add.text(
+      0,
+      -panelHeight / 2 + 120,
+      `Wave ${this.currentWave}    |    ${gameTime}    |    Lv.${this.player?.getLevel() || 1}`,
+      {
+        fontSize: '18px',
+        color: '#94a3b8',
+        fontFamily: 'monospace',
+        fontStyle: 'bold'
+      }
+    );
+    statsText.setOrigin(0.5);
+    this.pausePanel.add(statsText);
+
+    // Separator
+    const sep1 = this.add.graphics();
+    sep1.lineStyle(1, 0x374151, 0.8);
+    sep1.lineBetween(-panelWidth / 2 + 40, -panelHeight / 2 + 160, panelWidth / 2 - 40, -panelHeight / 2 + 160);
+    this.pausePanel.add(sep1);
+
+    // Current stats section
+    const statsY = -panelHeight / 2 + 200;
+
+    // HP
+    const hpPercent = this.player ? Math.round((this.player.getHp() / this.player.getMaxHp()) * 100) : 0;
+    const hpColor = hpPercent < 30 ? '#ef4444' : hpPercent < 60 ? '#f59e0b' : '#22c55e';
+    const hpBar = `█`.repeat(Math.floor(hpPercent / 5)) + `░`.repeat(20 - Math.floor(hpPercent / 5));
+    const hpText = this.add.text(
+      -panelWidth / 2 + 40,
+      statsY,
+      `HP:   ${hpBar} ${this.player?.getHp() || 0}/${this.player?.getMaxHp() || 100}`,
+      {
+        fontSize: '16px',
+        color: hpColor,
+        fontFamily: 'monospace',
+        fontStyle: 'bold'
+      }
+    );
+    hpText.setOrigin(0, 0);
+    this.pausePanel.add(hpText);
+
+    // EXP
+    const currentExp = this.player?.getExperience() || 0;
+    const expToLevel = this.player?.getExperienceToNextLevel() || 100;
+    const expPercent = Math.round((currentExp / expToLevel) * 100);
+    const expBar = `█`.repeat(Math.floor(expPercent / 5)) + `░`.repeat(20 - Math.floor(expPercent / 5));
+    const expText = this.add.text(
+      -panelWidth / 2 + 40,
+      statsY + 35,
+      `EXP:  ${expBar} ${currentExp}/${expToLevel}`,
+      {
+        fontSize: '16px',
+        color: '#60a5fa',
+        fontFamily: 'monospace',
+        fontStyle: 'bold'
+      }
+    );
+    expText.setOrigin(0, 0);
+    this.pausePanel.add(expText);
+
+    // Kill count
+    const killText = this.add.text(
+      -panelWidth / 2 + 40,
+      statsY + 70,
+      `KILLS: ${this.score.toLocaleString()}`,
+      {
+        fontSize: '16px',
+        color: '#fbbf24',
+        fontFamily: 'monospace',
+        fontStyle: 'bold'
+      }
+    );
+    killText.setOrigin(0, 0);
+    this.pausePanel.add(killText);
+
+    // Separator 2
+    const sep2 = this.add.graphics();
+    sep2.lineStyle(1, 0x374151, 0.8);
+    sep2.lineBetween(-panelWidth / 2 + 40, statsY + 115, panelWidth / 2 - 40, statsY + 115);
+    this.pausePanel.add(sep2);
+
+    // Active weapons
+    const weaponY = statsY + 145;
+    const weaponLabel = this.add.text(
+      0,
+      weaponY,
+      'ACTIVE WEAPONS',
+      {
+        fontSize: '14px',
+        color: '#9ca3af',
+        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        fontStyle: 'bold',
+        letterSpacing: 2
+      }
+    );
+    weaponLabel.setOrigin(0.5);
+    this.pausePanel.add(weaponLabel);
+
+    // Weapon icons (simple text representation)
+    const currentWeapon = this.player?.getCurrentWeapon() || 'projectile';
+    const weaponName = currentWeapon === 'projectile' ? '🏹 Bow (Projectile)' : '⚔️ Sword (Melee)';
+    const weaponIcons = this.add.text(
+      0,
+      weaponY + 35,
+      `Active: ${weaponName}\nPress TAB to switch`,
+      {
+        fontSize: '18px',
+        color: '#e0e7ff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        align: 'center',
+        fontStyle: 'bold'
+      }
+    );
+    weaponIcons.setOrigin(0.5);
+    this.pausePanel.add(weaponIcons);
+
+    // Resume instruction
+    const resumeText = this.add.text(
+      0,
+      panelHeight / 2 - 80,
+      'ESC or Click to Resume    |    Q to Quit',
+      {
+        fontSize: '14px',
+        color: '#6b7280',
+        fontFamily: '"Courier New", monospace',
+        fontStyle: 'bold'
+      }
+    );
+    resumeText.setOrigin(0.5);
+    this.pausePanel.add(resumeText);
+
+    // Blink animation
+    this.tweens.add({
+      targets: resumeText,
+      alpha: 0.4,
+      duration: 700,
+      yoyo: true,
+      repeat: -1
+    });
+
+    // Panel entrance animation
+    this.pausePanel.setScale(0.8);
+    this.pausePanel.setAlpha(0);
+    this.tweens.add({
+      targets: this.pausePanel,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 300,
+      ease: Phaser.Math.Easing.Back.Out
+    });
+
+    // Store overlay reference
+    this.pauseOverlay = this.add.container(0, 0);
+    this.pauseOverlay.add(overlay);
+    this.pauseOverlay.add(this.pausePanel);
+    this.pauseOverlay.setDepth(500);
+  }
+
+  /**
+   * 일시정지 UI 숨김
+   */
+  private hidePauseUI(): void {
+    if (this.pauseOverlay) {
+      this.tweens.add({
+        targets: this.pausePanel,
+        scaleX: 0.8,
+        scaleY: 0.8,
+        alpha: 0,
+        duration: 200,
+        ease: Phaser.Math.Easing.Back.In,
+        onComplete: () => {
+          this.pauseOverlay.destroy();
+          this.pauseOverlay = null as any;
+          this.pausePanel = null as any;
+        }
+      });
+    }
+  }
+
+  /**
+   * 메뉴로 나가기
+   */
+  private quitToMenu(): void {
+    this.isPaused = false;
+    this.scene.start('MenuScene');
+  }
+
+  /**
+   * 시간 포맷 (초 → MM:SS)
+   */
+  private formatTime(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 }
