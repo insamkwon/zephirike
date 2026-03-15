@@ -388,12 +388,18 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const scores = HighScoreManager.loadHighScores();
 
-    // 오버레이 - 인터랙티브로 설정하여 하단 클릭 차단
+    // 오버레이 - 시각용 Graphics (단순 배경)
+    // 컨테이너가 화면 중앙에 있으므로, 왼쪽 상단부터 채우려면 (-width/2, -height/2) 위치
     const overlay = this.add.graphics();
+    overlay.setPosition(-width / 2, -height / 2);
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, width, height);
     overlay.setDepth(200);
-    (overlay as any).setInteractive({ useHandCursor: false })
+
+    // 클릭 가능한 Zone (전체 화면 덮기) - 컨테이너 기준 위치
+    const overlayZone = this.add.zone(0, 0, width, height);
+    overlayZone.setDepth(201);
+    overlayZone.setInteractive({ useHandCursor: false })
       .on('pointerdown', () => {
         this.hideRanking();
       });
@@ -418,7 +424,7 @@ export class MenuScene extends Phaser.Scene {
     // 패널 컨테이너
     this.rankingPanel = this.add.container(width / 2, panelY);
     this.rankingPanel.setDepth(201);
-    this.rankingPanel.add([overlay, panelBg]);
+    this.rankingPanel.add([overlay, overlayZone, panelBg]);
 
     // 타이틀
     const title = this.add.text(0, -panelHeight / 2 + 45, '🏆 하이 스코어 랭킹', {
