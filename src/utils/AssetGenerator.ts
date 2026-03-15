@@ -46,8 +46,11 @@ export class AssetGenerator {
    * 기본 바닥 타일 (매우 밝은 색상으로 변경)
    */
   private generateFloorTile(): void {
+    const key = 'floor_tile';
+    if (this.scene.textures.exists(key)) return;
+
     const tileSize = 64;
-    const canvas = this.scene.textures.createCanvas('floor_tile', tileSize, tileSize);
+    const canvas = this.scene.textures.createCanvas(key, tileSize, tileSize);
 
     if (!canvas) return;
 
@@ -94,8 +97,11 @@ export class AssetGenerator {
    * 그리드 라인 타일 (배경 패턴)
    */
   private generateGridTile(): void {
+    const key = 'grid_tile';
+    if (this.scene.textures.exists(key)) return;
+
     const tileSize = 64;
-    const canvas = this.scene.textures.createCanvas('grid_tile', tileSize, tileSize);
+    const canvas = this.scene.textures.createCanvas(key, tileSize, tileSize);
 
     if (!canvas) return;
 
@@ -126,8 +132,11 @@ export class AssetGenerator {
    * 벽 타일
    */
   private generateWallTile(): void {
+    const key = 'wall_tile';
+    if (this.scene.textures.exists(key)) return;
+
     const tileSize = 64;
-    const canvas = this.scene.textures.createCanvas('wall_tile', tileSize, tileSize);
+    const canvas = this.scene.textures.createCanvas(key, tileSize, tileSize);
 
     if (!canvas) return;
 
@@ -180,7 +189,10 @@ export class AssetGenerator {
     const sizes_px = sizes.map(s => s * 2);
 
     sizes_px.forEach((size) => {
-      const canvas = this.scene.textures.createCanvas(`rock_${size}`, size, size);
+      const key = `rock_${size}`;
+      if (this.scene.textures.exists(key)) return;
+
+      const canvas = this.scene.textures.createCanvas(key, size, size);
 
       if (!canvas) return;
 
@@ -258,8 +270,11 @@ export class AssetGenerator {
    * 나무 장애물
    */
   private generateTreeObstacle(): void {
+    const key = 'tree';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 64;
-    const canvas = this.scene.textures.createCanvas('tree', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -342,9 +357,12 @@ export class AssetGenerator {
     const variants = ['h', 'v']; // horizontal, vertical
 
     variants.forEach(variant => {
+      const key = `wall_${variant}`;
+      if (this.scene.textures.exists(key)) return;
+
       const width = variant === 'h' ? 80 : 32;
       const height = variant === 'h' ? 32 : 80;
-      const canvas = this.scene.textures.createCanvas(`wall_${variant}`, width, height);
+      const canvas = this.scene.textures.createCanvas(key, width, height);
 
       if (!canvas) return;
 
@@ -399,8 +417,11 @@ export class AssetGenerator {
    * 잔해 장애물 (파괴 가능)
    */
   private generateDebrisObstacle(): void {
+    const key = 'debris';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 40;
-    const canvas = this.scene.textures.createCanvas('debris', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -468,8 +489,11 @@ export class AssetGenerator {
    * 상체가 명확하게 보이는 인간형 캐릭터
    */
   private generatePlayerSprite(): void {
+    const key = 'player_hero';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 64;
-    const canvas = this.scene.textures.createCanvas('player_hero', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -634,8 +658,11 @@ export class AssetGenerator {
    * 슬라임 스프라이트 (기본 적)
    */
   private generateSlimeSprite(): void {
+    const key = 'slime';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 32;
-    const canvas = this.scene.textures.createCanvas('slime', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -683,8 +710,11 @@ export class AssetGenerator {
    * 해골 스프라이트 (중간 적)
    */
   private generateSkeletonSprite(): void {
+    const key = 'skeleton';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 40;
-    const canvas = this.scene.textures.createCanvas('skeleton', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -736,8 +766,11 @@ export class AssetGenerator {
    * 박쥐 스프라이트 (빠른 적)
    */
   private generateBatSprite(): void {
+    const key = 'bat';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 36;
-    const canvas = this.scene.textures.createCanvas('bat', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -798,8 +831,11 @@ export class AssetGenerator {
    * 보스 스프라이트 생성
    */
   private generateBossSprite(): void {
+    const key = 'boss';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 80;
-    const canvas = this.scene.textures.createCanvas('boss', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -895,8 +931,11 @@ export class AssetGenerator {
    * 화살 투사체 (원거리 공격용)
    */
   private generateArrowProjectile(): void {
+    const key = 'projectile';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 48;
-    const canvas = this.scene.textures.createCanvas('projectile', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -985,8 +1024,11 @@ export class AssetGenerator {
    * 근접 공격 효과 (검격 - 검은색 테두리와 흰색 내부)
    */
   private generateSwordSlash(): void {
+    const key = 'slash';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 80;
-    const canvas = this.scene.textures.createCanvas('slash', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -1059,6 +1101,8 @@ export class AssetGenerator {
     ];
 
     colors.forEach(({ name, color, darkColor }) => {
+      if (this.scene.textures.exists(name)) return;
+
       const size = 16;
       const canvas = this.scene.textures.createCanvas(name, size, size);
 
@@ -1106,8 +1150,11 @@ export class AssetGenerator {
    * HP 하트
    */
   private generateHeartSprite(): void {
+    const key = 'heart';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 24;
-    const canvas = this.scene.textures.createCanvas('heart', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -1150,8 +1197,11 @@ export class AssetGenerator {
    * 폭발 파티클
    */
   private generateExplosionParticle(): void {
+    const key = 'particle_explosion';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 8;
-    const canvas = this.scene.textures.createCanvas('particle_explosion', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
@@ -1176,8 +1226,11 @@ export class AssetGenerator {
    * 반짝임 효과
    */
   private generateSparkle(): void {
+    const key = 'sparkle';
+    if (this.scene.textures.exists(key)) return;
+
     const size = 12;
-    const canvas = this.scene.textures.createCanvas('sparkle', size, size);
+    const canvas = this.scene.textures.createCanvas(key, size, size);
 
     if (!canvas) return;
 
