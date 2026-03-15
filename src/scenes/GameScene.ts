@@ -22,18 +22,18 @@ export class GameScene extends Phaser.Scene {
   private mousePointer!: Phaser.Input.Pointer;
   private score: number = 0;
   private hudManager!: HUDManager;
-  private enemySpawnRate: number = 2000;
+  private enemySpawnRate: number = 1800; // Slightly faster spawns (was 2000)
   private enemySpawnTimer!: Phaser.Time.TimerEvent; // Reference to spawn timer for proper management
   private gameStartTime: number = 0;
   private isGameActive: boolean = true;
 
   // Learning period state
-  private learningPeriodDuration: number = 20000; // 20 seconds in milliseconds
+  private learningPeriodDuration: number = 15000; // 15 seconds (was 20000) - shorter learning period
   private isLearningPeriod: boolean = true;
   private learningPeriodOverlay!: Phaser.GameObjects.Graphics;
   private playerShield!: Phaser.GameObjects.Graphics;
-  private normalEnemySpawnRate: number = 2000;
-  private learningPeriodSpawnRate: number = 8000; // Much slower spawn rate during learning period
+  private normalEnemySpawnRate: number = 1800; // Slightly faster (was 2000)
+  private learningPeriodSpawnRate: number = 6000; // Faster learning spawns (was 8000)
 
   // Boss system
   private boss!: Boss | null;
@@ -1098,8 +1098,8 @@ export class GameScene extends Phaser.Scene {
       enemyType = roll < 0.6 ? 'slime' : 'skeleton';
     }
 
-    // Scale enemy difficulty with wave number
-    const waveMultiplier = 1 + (this.currentWave - 1) * 0.15;
+    // Scale enemy difficulty with wave number (steeper scaling)
+    const waveMultiplier = 1 + (this.currentWave - 1) * 0.18; // Was 0.15
     const enemyConfig: EnemyConfig = {
       x,
       y,
@@ -1127,10 +1127,10 @@ export class GameScene extends Phaser.Scene {
     this.currentWave++;
     this.enemiesSpawnedInWave = 0;
     this.enemiesKilledInWave = 0;
-    this.enemiesPerWave = Math.floor(10 + this.currentWave * 2); // Increase enemies per wave
+    this.enemiesPerWave = Math.floor(12 + this.currentWave * 2.5); // More enemies (was 10 + wave * 2)
 
-    // Reduce spawn rate slightly with each wave (faster spawns)
-    this.enemySpawnRate = Math.max(700, 2000 - (this.currentWave - 1) * 100);
+    // Reduce spawn rate more aggressively with each wave (faster spawns)
+    this.enemySpawnRate = Math.max(700, 1800 - (this.currentWave - 1) * 120); // Was 2000 - wave * 100
     this.startEnemySpawning();
 
     // Show wave announcement
@@ -1526,8 +1526,8 @@ export class GameScene extends Phaser.Scene {
     this.currentWave++;
     this.enemiesSpawnedInWave = 0;
     this.enemiesKilledInWave = 0;
-    this.enemiesPerWave = Math.floor(10 + this.currentWave * 3); // More enemies after strategic phase
-    this.enemySpawnRate = Math.max(700, 2000 - (this.currentWave - 1) * 100);
+    this.enemiesPerWave = Math.floor(12 + this.currentWave * 3); // More enemies (was 10 + wave * 3)
+    this.enemySpawnRate = Math.max(700, 1800 - (this.currentWave - 1) * 120); // Faster spawns
     this.startEnemySpawning();
 
     this.updateWaveUI();
@@ -2094,13 +2094,13 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // Increase difficulty over time (only after learning period ends)
+    // Increase difficulty over time (only after learning period ends) - more aggressive scaling
     if (!this.isLearningPeriod) {
       const elapsedTime = currentTime - this.gameStartTime;
-      if (elapsedTime > 60000 && this.enemySpawnRate > 1200) {
-        this.enemySpawnRate = 1200;
-      } else if (elapsedTime > 120000 && this.enemySpawnRate > 800) {
-        this.enemySpawnRate = 800;
+      if (elapsedTime > 60000 && this.enemySpawnRate > 1000) {
+        this.enemySpawnRate = 1000; // Was 1200 - faster spawns
+      } else if (elapsedTime > 120000 && this.enemySpawnRate > 600) {
+        this.enemySpawnRate = 600; // Was 800 - faster spawns
       }
     }
   }
