@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>제피라이크 (Zephirike)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+    }
+    #game-container {
+      position: relative;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    /* Boss Warning */
+    #boss-warning {
+      position: absolute;
+      top: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ff0000;
+      font-size: 36px;
+      font-weight: bold;
+      text-shadow: 3px 3px 0 #000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 90;
+      text-align: center;
+    }
+    #boss-warning.show {
+      opacity: 1;
+      animation: pulse 0.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Enemy Status Indicators (for testing) */
+    #enemy-status-list {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 12px;
+      text-shadow: 1px 1px 0 #000;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .enemy-status {
+      margin-bottom: 2px;
+    }
+    .status-knockback { color: #00ffff; }
+    .status-stun { color: #ffff00; }
+    .status-invincible { color: #ff00ff; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <!-- Phaser will create canvas automatically -->
+    <!-- <canvas id="game"></canvas> -->
+
+    <!-- Left UI and Right UI are now rendered in Phaser Canvas to avoid duplication -->
+    <!-- HTML overlays below are for special effects only -->
+
+    <!-- Boss Warning -->
+    <div id="boss-warning">
+      ⚠️ 보스 접근 중! ⚠️
+    </div>
+
+    <!-- Enemy Status List (for testing) -->
+    <div id="enemy-status-list"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

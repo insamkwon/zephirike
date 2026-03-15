@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Claude
+.claude/
+
+# Test results
+test-results/
+playwright-report/
+
+# Ouroboros
+.ouroboros/
+
+# Development docs (keep only essential)
+*.md
+!README.md
+
+# Backup files
+*.backup
+*.bak
+SUB_AC_*.txt
+
+# Examples (keep for reference)
+# src/examples/
