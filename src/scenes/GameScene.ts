@@ -1852,7 +1852,7 @@ export class GameScene extends Phaser.Scene {
     this.isRestarting = true;
 
     // 시작 화면으로 이동
-    this.scene.start('StartScene');
+    this.scene.start('MenuScene');
   }
 
   private openHighScores(): void {
