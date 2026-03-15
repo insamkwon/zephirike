@@ -12,6 +12,7 @@ export class MenuScene extends Phaser.Scene {
   private titleContainer!: Phaser.GameObjects.Container;
   private rankingPanel!: Phaser.GameObjects.Container;
   private isRankingVisible: boolean = false;
+  private rankingKeyHandler: (() => void) | null = null;
 
   constructor() {
     super({ key: 'MenuScene' });
@@ -285,11 +286,15 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     const scores = HighScoreManager.loadHighScores();
 
-    // 오버레이
+    // 오버레이 - 인터랙티브로 설정하여 하단 클릭 차단
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, width, height);
     overlay.setDepth(200);
+    (overlay as any).setInteractive({ useHandCursor: false })
+      .on('pointerdown', () => {
+        this.hideRanking();
+      });
 
     // 패널
     const panelWidth = 500;
@@ -391,14 +396,40 @@ export class MenuScene extends Phaser.Scene {
 
     this.isRankingVisible = true;
 
-    // ESC로 닫기
-    const escHandler = () => {
+    // 키보드로 닫기 - once 대신 이벤트 리스너 추가
+    this.setupRankingKeyboardHandlers();
+  }
+
+  /**
+   * 랭킹 키보드 핸들러 설정
+   */
+  private setupRankingKeyboardHandlers(): void {
+    // 기존 핸들러 제거
+    if (this.rankingKeyHandler) {
+      this.input.keyboard!.off('keydown-ESC', this.rankingKeyHandler);
+      this.input.keyboard!.off('keydown-H', this.rankingKeyHandler);
+    }
+
+    // 새 핸들러 생성
+    this.rankingKeyHandler = () => {
       if (this.isRankingVisible) {
         this.hideRanking();
       }
     };
-    this.input.keyboard!.once('keydown-ESC', escHandler);
-    this.input.keyboard!.once('keydown-H', escHandler);
+
+    this.input.keyboard!.on('keydown-ESC', this.rankingKeyHandler);
+    this.input.keyboard!.on('keydown-H', this.rankingKeyHandler);
+  }
+
+  /**
+   * 랭킹 키보드 핸들러 정리
+   */
+  private cleanupRankingKeyboardHandlers(): void {
+    if (this.rankingKeyHandler) {
+      this.input.keyboard!.off('keydown-ESC', this.rankingKeyHandler);
+      this.input.keyboard!.off('keydown-H', this.rankingKeyHandler);
+      this.rankingKeyHandler = null;
+    }
   }
 
   /**
@@ -406,6 +437,9 @@ export class MenuScene extends Phaser.Scene {
    */
   private hideRanking(): void {
     if (!this.isRankingVisible || !this.rankingPanel) return;
+
+    // 키보드 핸들러 정리
+    this.cleanupRankingKeyboardHandlers();
 
     this.tweens.add({
       targets: this.rankingPanel,
