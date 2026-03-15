@@ -189,8 +189,11 @@ export class MenuScene extends Phaser.Scene {
       ease: Phaser.Math.Easing.Sine.InOut
     });
 
+    // 랭킹 버튼 (게임 시작 버튼 아래)
+    this.createMainRankingButton(width, height);
+
     // 안내 텍스트 - 하단
-    const controlsHint = this.add.text(width / 2, height - 30, 'WASD: 이동  |  마우스: 공격 방향', {
+    const controlsHint = this.add.text(width / 2, height - 30, 'WASD: 이동  |  마우스: 공격 방향  |  H: 랭킹', {
       fontSize: '14px',
       color: '#64748b',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -264,6 +267,105 @@ export class MenuScene extends Phaser.Scene {
       .on('pointerdown', () => {
         this.toggleRanking();
       });
+  }
+
+  /**
+   * 메인 랭킹 버튼 생성 (게임 시작 버튼 아래)
+   */
+  private createMainRankingButton(width: number, height: number): void {
+    const buttonX = width / 2;
+    const buttonY = height / 2 + 160;
+
+    const buttonBg = this.add.graphics();
+
+    // 그림자
+    buttonBg.fillStyle(0x000000, 0.4);
+    buttonBg.fillRoundedRect(-102, -27, 204, 54, 14);
+
+    // 메인 배경 - 금색 테마
+    buttonBg.fillStyle(0x4a3c1a, 1);
+    buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+
+    // 보더 - 금색
+    buttonBg.lineStyle(2, 0xd4af37, 1);
+    buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+
+    // 상단 하이라이트
+    buttonBg.fillStyle(0xd4af37, 0.5);
+    buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+
+    const button = this.add.container(buttonX, buttonY);
+    button.add(buttonBg);
+
+    // 버튼 텍스트
+    const buttonText = this.add.text(0, 0, '🏆 하이 스코어 랭킹', {
+      fontSize: '20px',
+      color: '#f4e4c1',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif',
+      fontStyle: 'bold',
+      stroke: '#2a1a00',
+      strokeThickness: 3
+    });
+    buttonText.setOrigin(0.5);
+    button.add(buttonText);
+
+    // 키 힌트
+    const keyHint = this.add.text(70, 0, '[H]', {
+      fontSize: '14px',
+      color: '#d4af37',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    keyHint.setOrigin(0.5);
+    button.add(keyHint);
+
+    button.setSize(200, 50);
+
+    (button as any).setInteractive({ useHandCursor: true })
+      .on('pointerover', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x000000, 0.5);
+        buttonBg.fillRoundedRect(-104, -29, 208, 58, 14);
+        buttonBg.fillStyle(0x5a4c2a, 1);
+        buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.lineStyle(3, 0xf4e4c1, 1);
+        buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.fillStyle(0xf4e4c1, 0.7);
+        buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+        buttonText.setScale(1.05);
+        keyHint.setColor('#f4e4c1');
+      })
+      .on('pointerout', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x000000, 0.4);
+        buttonBg.fillRoundedRect(-102, -27, 204, 54, 14);
+        buttonBg.fillStyle(0x4a3c1a, 1);
+        buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.lineStyle(2, 0xd4af37, 1);
+        buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.fillStyle(0xd4af37, 0.5);
+        buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+        buttonText.setScale(1);
+        keyHint.setColor('#d4af37');
+      })
+      .on('pointerdown', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x3a2c0a, 1);
+        buttonBg.fillRoundedRect(-98, -23, 196, 46, 10);
+        buttonBg.lineStyle(2, 0xd4af37, 1);
+        buttonBg.strokeRoundedRect(-98, -23, 196, 46, 10);
+        this.time.delayedCall(100, () => this.toggleRanking());
+      });
+
+    // 부드러운 플로팅 애니메이션
+    this.tweens.add({
+      targets: button,
+      y: buttonY - 5,
+      duration: 2500,
+      yoyo: true,
+      repeat: -1,
+      ease: Phaser.Math.Easing.Sine.InOut
+    });
   }
 
   /**
