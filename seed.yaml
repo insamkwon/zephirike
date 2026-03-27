@@ -1,0 +1,167 @@
+goal: >
+  Vampire Survivors 스타일 메타 프로그레션 시스템을 zephirike 게임에 추가.
+  적 처치 시 골드 코인이 드롭되고 플레이어가 접근하면 자동 흡수되며,
+  누적된 골드로 MenuScene에서 영구 스탯 업그레이드를 구매하여
+  다음 런에 반영되는 크로스 세션 진행 시스템 구현.
+
+constraints:
+  - Phaser 3 프레임워크 사용 (기존 프로젝트 유지)
+  - TypeScript strict mode
+  - localStorage로 데이터 저장 (서버 불필요)
+  - 기존 게임 루프/밸런스 최소한으로 변경
+  - 캐릭터 해금/선택 시스템 제외
+  - 장비/인벤토리 시스템 제외
+  - 기존 코드 패턴 및 아키텍처 준수 (systems/, entities/, scenes/, ui/ 구조)
+
+acceptance_criteria:
+  - 적 처치 시 골드 코인 스프라이트가 바닥에 드롭됨
+  - 플레이어 접근 시 코인이 자석처럼 끌려와 자동 흡수됨
+  - HUD에 현재 런에서 획득한 골드가 실시간 표시됨
+  - 게임 오버 시 획득 골드가 localStorage에 누적 저장됨
+  - MenuScene에 '업그레이드' 버튼이 추가되고 팝업으로 업그레이드 목록 표시
+  - 업그레이드 항목별 레벨/비용/효과가 표시됨
+  - 업그레이드 구매 시 골드 차감 및 레벨 증가
+  - 업그레이드 레벨별 비용이 단계적으로 증가
+  - 다음 런 시작 시 구매한 영구 업그레이드가 Player 스탯에 반영됨
+  - 총 보유 골드와 업그레이드 상태가 세션 간 유지됨
+
+ontology_schema:
+  name: MetaProgression
+  description: 크로스 세션 메타 진행 데이터 모델
+  fields:
+    - name: totalGold
+      type: number
+      description: 누적 보유 골드 (전체 런에서 모은 총량 - 사용량)
+
+    - name: permanentUpgrades
+      type: object
+      description: 영구 업그레이드 상태 맵 (업그레이드ID → 현재 레벨)
+
+    - name: upgradeDefinitions
+      type: array
+      description: 업그레이드 정의 목록
+      items:
+        - name: id
+          type: string
+          description: 업그레이드 고유 식별자
+
+        - name: name
+          type: string
+          description: 표시 이름 (한국어)
+
+        - name: description
+          type: string
+          description: 효과 설명
+
+        - name: maxLevel
+          type: number
+          description: 최대 강화 레벨
+
+        - name: baseCost
+          type: number
+          description: 레벨 1 구매 비용
+
+        - name: costMultiplier
+          type: number
+          description: 레벨당 비용 증가 배율
+
+        - name: statKey
+          type: string
+          description: 적용될 Player 스탯 키 (damage, maxHp, speed, attackSpeed, attackRange)
+
+        - name: bonusPerLevel
+          type: number
+          description: 레벨당 증가값
+
+    - name: goldCoin
+      type: object
+      description: 인게임 골드 코인 엔티티
+      items:
+        - name: value
+          type: number
+          description: 코인 가치
+
+        - name: magnetRange
+          type: number
+          description: 플레이어 자석 흡수 범위
+
+        - name: magnetSpeed
+          type: number
+          description: 흡수 시 이동 속도
+
+evaluation_principles:
+  - name: gameplay_feel
+    description: 골드 드롭/흡수가 시각적으로 만족스럽고 게임플레이를 방해하지 않음
+    weight: 0.25
+
+  - name: balance
+    description: 영구 업그레이드가 게임을 너무 쉽게 만들지 않으면서 진행감을 줌
+    weight: 0.25
+
+  - name: data_integrity
+    description: 골드/업그레이드 데이터가 세션 간 안정적으로 유지되며 손실 없음
+    weight: 0.2
+
+  - name: ui_consistency
+    description: 업그레이드 UI가 기존 MenuScene/HUD 디자인과 일관됨
+    weight: 0.15
+
+  - name: code_quality
+    description: 기존 코드베이스 패턴(systems/, entities/ 분리)을 따름
+    weight: 0.15
+
+exit_conditions:
+  - name: all_ac_pass
+    description: 모든 acceptance criteria 충족
+    criteria: 10개 AC 항목 전부 통과
+
+  - name: no_regression
+    description: 기존 게임 기능에 회귀 버그 없음
+    criteria: 기존 XP/레벨업/하이스코어/웨이브 시스템 정상 작동
+
+  - name: persistence_verified
+    description: 데이터 영속성 검증
+    criteria: 브라우저 새로고침 후 골드/업그레이드 유지 확인
+
+metadata:
+  version: "1.0"
+  timestamp: "2026-03-28"
+  ambiguity_score: 0.12
+  source: ouroboros-interview-path-b
+  project_type: brownfield
+  context_references:
+    - path: src/scenes/GameScene.ts
+      role: primary
+      summary: 메인 게임 루프 - 적 처치/골드 드롭 로직 추가 지점
+
+    - path: src/entities/Player.ts
+      role: primary
+      summary: 플레이어 스탯 - 영구 업그레이드 적용 지점
+
+    - path: src/scenes/MenuScene.ts
+      role: primary
+      summary: 메뉴 화면 - 업그레이드 UI 추가 지점
+
+    - path: src/ui/HUDManager.ts
+      role: primary
+      summary: HUD - 골드 표시 추가 지점
+
+    - path: src/systems/HighScoreManager.ts
+      role: reference
+      summary: localStorage 패턴 참조
+
+    - path: src/types/GameTypes.ts
+      role: reference
+      summary: 타입 정의 패턴 참조
+
+  existing_patterns:
+    - "systems/ 폴더에 싱글톤 매니저 클래스 패턴"
+    - "entities/ 폴더에 게임 오브젝트 클래스"
+    - "scenes/ 폴더에 Phaser.Scene 확장"
+    - "ui/ 폴더에 UI 컴포넌트"
+    - "Phaser 이벤트 시스템으로 씬 간 통신"
+
+  existing_dependencies:
+    - "phaser ^3.80.0"
+    - "typescript ^5.3.0"
+    - "vite ^5.0.0"

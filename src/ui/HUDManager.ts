@@ -17,6 +17,7 @@ export class HUDManager {
   private xpText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  private goldText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private waveCounter!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
@@ -54,8 +55,8 @@ export class HUDManager {
   private createLeftPanel(): void {
     const panelX = 12;
     const panelY = 12;
-    const panelWidth = 200;  // 220 → 200 (공격 모드 제거로 축소)
-    const panelHeight = 68;  // 72 → 68
+    const panelWidth = 200;
+    const panelHeight = 88;  // 골드 표시 추가로 확장
 
     this.leftPanel = this.scene.add.container(panelX, panelY);
     this.leftPanel.setScrollFactor(0);
@@ -205,6 +206,33 @@ export class HUDManager {
     );
     this.scoreText.setOrigin(0.5, 0);
     this.leftPanel.add(this.scoreText);
+
+    // 골드 행 (별도 줄, 더 눈에 띄게)
+    const goldY = rowY + 22;
+
+    // 골드 배경 바
+    const goldBarBg = this.scene.add.graphics();
+    goldBarBg.fillStyle(0x78350f, 0.4);
+    goldBarBg.fillRoundedRect(padding, goldY - 2, panelWidth - padding * 2, 18, 4);
+    goldBarBg.lineStyle(1, 0xd4af37, 0.3);
+    goldBarBg.strokeRoundedRect(padding, goldY - 2, panelWidth - padding * 2, 18, 4);
+    this.leftPanel.add(goldBarBg);
+
+    this.goldText = this.scene.add.text(
+      panelWidth / 2,
+      goldY + 7,
+      '🪙 0 G',
+      {
+        fontSize: '13px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: '#FFD700',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2
+      }
+    );
+    this.goldText.setOrigin(0.5, 0.5);
+    this.leftPanel.add(this.goldText);
   }
 
   /**
@@ -444,6 +472,24 @@ export class HUDManager {
    */
   updateScore(score: number): void {
     this.scoreText.setText(`${score.toLocaleString()}`);
+  }
+
+  updateGold(amount: number): void {
+    this.goldText.setText(`🪙 ${amount.toLocaleString()} G`);
+
+    // Gold flash color then return
+    this.goldText.setColor('#FFFFFF');
+    this.scene.tweens.add({
+      targets: this.goldText,
+      scaleX: 1.25,
+      scaleY: 1.25,
+      duration: 150,
+      yoyo: true,
+      ease: Phaser.Math.Easing.Back.Out,
+      onComplete: () => {
+        this.goldText.setColor('#FFD700');
+      }
+    });
   }
 
   /**

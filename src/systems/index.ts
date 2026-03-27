@@ -10,6 +10,7 @@ export * from './ParticleManager';
 export * from './HighScoreManager';
 export * from './HitCallbackManager';
 export * from './AssetLoader';
+export * from './MetaProgressionManager';
 
 // Re-export types for convenience (using 'export type' for isolatedModules compatibility)
 export type {

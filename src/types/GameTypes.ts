@@ -170,5 +170,32 @@ export interface HitCallbackFilter {
   isCritical?: boolean;        // Only critical hits
 }
 
+// ==================== META PROGRESSION ====================
+
+export interface MetaUpgradeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  stat: keyof MetaStatBonuses;
+  baseValue: number;
+  baseCost: number;
+  costScaling: number;
+  maxLevel: number;
+  icon: string;
+}
+
+export interface MetaStatBonuses {
+  maxHp: number;
+  damage: number;
+  speed: number;
+  attackSpeed: number;
+  attackRange: number;
+}
+
+export interface MetaProgressionData {
+  gold: number;
+  upgradeLevels: Record<string, number>;
+}
+
 // Re-export HitCallbackManager for convenience
 export { HitCallbackManager } from '../systems/HitCallbackManager';

@@ -12,6 +12,8 @@ import { HighScoreManager } from '../systems/HighScoreManager';
 import { Weapon, WeaponOption, WeaponType, WeaponRarity, WeaponCategory, DamageType } from '../types/WeaponTypes';
 import { getRandomUpgrades } from '../data/Weapons';
 import { AssetGenerator } from '../utils/AssetGenerator';
+import { GoldCoin } from '../entities/GoldCoin';
+import { MetaProgressionManager } from '../systems/MetaProgressionManager';
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -67,6 +69,10 @@ export class GameScene extends Phaser.Scene {
   private bossDefeatText: Phaser.GameObjects.Text | null = null;
   private strategicOverlay: Phaser.GameObjects.Graphics | null = null;
 
+  // Gold coin system
+  private goldCoins!: Phaser.GameObjects.Group;
+  private runGold: number = 0;
+
   // Game over restart flag
   private isRestarting: boolean = false;
 
@@ -99,22 +105,25 @@ export class GameScene extends Phaser.Scene {
     // Initialize groups
     this.enemies = this.add.group();
     this.obstacles = this.add.group();
+    this.goldCoins = this.add.group();
+    this.runGold = 0;
 
     // Setup input
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys('W,A,S,D,SPACE');
     this.mousePointer = this.input.activePointer;
 
-    // Create player
+    // Create player with meta progression bonuses
+    const metaBonuses = MetaProgressionManager.getStatBonuses();
     const playerConfig: PlayerConfig = {
       x: this.cameras.main.width / 2,
       y: this.cameras.main.height / 2,
-      speed: 200,
-      hp: 100,
-      maxHp: 100,
-      attackSpeed: 2,
-      attackRange: 300,
-      damage: 30
+      speed: 200 + metaBonuses.speed,
+      hp: 100 + metaBonuses.maxHp,
+      maxHp: 100 + metaBonuses.maxHp,
+      attackSpeed: 2 + metaBonuses.attackSpeed,
+      attackRange: 300 + metaBonuses.attackRange,
+      damage: 30 + metaBonuses.damage
     };
     this.player = new Player(this, playerConfig.x, playerConfig.y, playerConfig);
 
@@ -1248,6 +1257,16 @@ export class GameScene extends Phaser.Scene {
       );
       this.score += 100;
 
+      // Drop gold coin
+      const coinValue = 5 + Math.floor(Math.random() * 6); // 5-10 gold
+      const coin = new GoldCoin(
+        this,
+        enemy.x + Phaser.Math.Between(-20, 20),
+        enemy.y + Phaser.Math.Between(-20, 20),
+        coinValue
+      );
+      this.goldCoins.add(coin);
+
       // Award experience points (no visual feedback to avoid clutter)
       const xpGained = 25; // 25 XP per enemy kill
       const leveledUp = this.player.gainExperience(xpGained);
@@ -1396,6 +1415,21 @@ export class GameScene extends Phaser.Scene {
     console.log('Boss destroyed!');
 
     this.bossesDefeated++;
+
+    // Drop boss gold (large reward)
+    if (this.boss) {
+      const bossGoldValue = 50 + Math.floor(Math.random() * 51); // 50-100 gold
+      for (let i = 0; i < 5; i++) {
+        const coin = new GoldCoin(
+          this,
+          this.boss.x + Phaser.Math.Between(-40, 40),
+          this.boss.y + Phaser.Math.Between(-40, 40),
+          Math.floor(bossGoldValue / 5)
+        );
+        this.goldCoins.add(coin);
+      }
+    }
+
     this.isBossActive = false;
     this.boss = null;
 
@@ -1579,6 +1613,11 @@ export class GameScene extends Phaser.Scene {
   private endGame(): void {
     this.isGameActive = false;
 
+    // Save accumulated gold
+    if (this.runGold > 0) {
+      MetaProgressionManager.addGold(this.runGold);
+    }
+
     // Stop the game timer
     let finalTime = '00:00';
     if (this.gameTimer && this.gameTimer.isActive()) {
@@ -1611,7 +1650,7 @@ export class GameScene extends Phaser.Scene {
     panelContainer.setDepth(200);
 
     const panelWidth = 420;
-    const panelHeight = 380;
+    const panelHeight = 430;
 
     // 패널 배경
     const panelBg = this.add.graphics();
@@ -1767,6 +1806,97 @@ export class GameScene extends Phaser.Scene {
     );
     timeValue.setOrigin(0.5);
     panelContainer.add(timeValue);
+
+    // 획득 골드 섹션
+    if (this.runGold > 0) {
+      const goldSeparator = this.add.graphics();
+      goldSeparator.lineStyle(1, 0x374151, 0.8);
+      goldSeparator.lineBetween(-panelWidth/2 + 30, -panelHeight/2 + 340, panelWidth/2 - 30, -panelHeight/2 + 340);
+      panelContainer.add(goldSeparator);
+
+      // 골드 배경 강조
+      const goldBg = this.add.graphics();
+      goldBg.fillStyle(0x78350f, 0.4);
+      goldBg.fillRoundedRect(-100, -panelHeight/2 + 348, 200, 42, 10);
+      goldBg.lineStyle(1, 0xfbbf24, 0.5);
+      goldBg.strokeRoundedRect(-100, -panelHeight/2 + 348, 200, 42, 10);
+      panelContainer.add(goldBg);
+
+      const goldLabel = this.add.text(
+        0, -panelHeight/2 + 355,
+        '획득 골드',
+        {
+          fontSize: '12px',
+          color: '#d4af37',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          fontStyle: '500'
+        }
+      );
+      goldLabel.setOrigin(0.5);
+      panelContainer.add(goldLabel);
+
+      const goldValue = this.add.text(
+        0, -panelHeight/2 + 378,
+        `+ ${this.runGold.toLocaleString()} G`,
+        {
+          fontSize: '24px',
+          color: '#FFD700',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif',
+          fontStyle: 'bold',
+          stroke: '#78350f',
+          strokeThickness: 3
+        }
+      );
+      goldValue.setOrigin(0.5);
+      panelContainer.add(goldValue);
+
+      // 골드 카운트업 애니메이션
+      const counter = { value: 0 };
+      this.tweens.add({
+        targets: counter,
+        value: this.runGold,
+        duration: 800,
+        delay: 600,
+        ease: Phaser.Math.Easing.Quadratic.Out,
+        onUpdate: () => {
+          goldValue.setText(`+ ${Math.floor(counter.value).toLocaleString()} G`);
+        }
+      });
+
+      // 골드 펄스 효과
+      this.tweens.add({
+        targets: goldValue,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 500,
+        yoyo: true,
+        repeat: 2,
+        delay: 600,
+        ease: Phaser.Math.Easing.Sine.InOut
+      });
+
+      // 총 보유 골드
+      const totalGold = MetaProgressionManager.getGold();
+      const totalLabel = this.add.text(
+        0, -panelHeight/2 + 398,
+        `총 보유: ${totalGold.toLocaleString()} G`,
+        {
+          fontSize: '11px',
+          color: '#9a8a6a',
+          fontFamily: '"Courier New", monospace'
+        }
+      );
+      totalLabel.setOrigin(0.5);
+      totalLabel.setAlpha(0);
+      panelContainer.add(totalLabel);
+
+      this.tweens.add({
+        targets: totalLabel,
+        alpha: 1,
+        duration: 300,
+        delay: 1500
+      });
+    }
 
     // 하이스코어 알림
     let rankContainer: Phaser.GameObjects.Container | null = null;
@@ -2068,6 +2198,19 @@ export class GameScene extends Phaser.Scene {
     if (this.boss && this.isBossActive) {
       this.boss.update();
     }
+
+    // Update gold coins - magnet attraction and collection
+    const magnetRadius = 120;
+    const coinsToRemove: GoldCoin[] = [];
+    this.goldCoins.getChildren().forEach((coinObj) => {
+      const coin = coinObj as GoldCoin;
+      if (coin.updateCoin(this.player.x, this.player.y, magnetRadius)) {
+        this.runGold += coin.getValue();
+        this.hudManager.updateGold(this.runGold);
+        coinsToRemove.push(coin);
+      }
+    });
+    coinsToRemove.forEach(coin => coin.destroy());
 
     // Create projectile trail effects
     this.player.getProjectiles().getChildren().forEach((projectile: any) => {

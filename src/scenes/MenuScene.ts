@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { HighScoreManager } from '../systems/HighScoreManager';
+import { MetaProgressionManager } from '../systems/MetaProgressionManager';
+import { UpgradePopup } from '../ui/UpgradePopup';
 
 /**
  * Main Menu Scene - Game start screen
@@ -13,6 +15,10 @@ export class MenuScene extends Phaser.Scene {
   private rankingPanel!: Phaser.GameObjects.Container;
   private isRankingVisible: boolean = false;
   private rankingKeyHandler: (() => void) | null = null;
+  private upgradePopup: UpgradePopup | null = null;
+  private isUpgradeVisible: boolean = false;
+  private upgradeKeyHandler: (() => void) | null = null;
+  private upgradeGoldText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'MenuScene' });
@@ -189,11 +195,14 @@ export class MenuScene extends Phaser.Scene {
       ease: Phaser.Math.Easing.Sine.InOut
     });
 
-    // 랭킹 버튼 (게임 시작 버튼 아래)
+    // 강화 버튼 (게임 시작 버튼 아래)
+    this.createUpgradeButton(width, height);
+
+    // 랭킹 버튼 (강화 버튼 아래)
     this.createMainRankingButton(width, height);
 
     // 안내 텍스트 - 하단
-    const controlsHint = this.add.text(width / 2, height - 30, 'WASD: 이동  |  마우스: 공격 방향  |  H: 랭킹', {
+    const controlsHint = this.add.text(width / 2, height - 30, 'WASD: 이동  |  마우스: 공격 방향  |  U: 강화  |  H: 랭킹', {
       fontSize: '14px',
       color: '#64748b',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -202,17 +211,30 @@ export class MenuScene extends Phaser.Scene {
 
     // 스페이스바로 시작
     this.input.keyboard!.on('keydown-SPACE', () => {
-      this.startGame();
+      if (!this.isUpgradeVisible && !this.isRankingVisible) {
+        this.startGame();
+      }
     });
 
     // 엔터키로도 시작
     this.input.keyboard!.on('keydown-ENTER', () => {
-      this.startGame();
+      if (!this.isUpgradeVisible && !this.isRankingVisible) {
+        this.startGame();
+      }
     });
 
     // H 키로 랭킹 토글
     this.input.keyboard!.on('keydown-H', () => {
-      this.toggleRanking();
+      if (!this.isUpgradeVisible) {
+        this.toggleRanking();
+      }
+    });
+
+    // U 키로 강화 토글
+    this.input.keyboard!.on('keydown-U', () => {
+      if (!this.isRankingVisible) {
+        this.toggleUpgrades();
+      }
     });
 
     // 랭킹 표시 버튼 (하단 우측)
@@ -270,11 +292,172 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
-   * 메인 랭킹 버튼 생성 (게임 시작 버튼 아래)
+   * 강화 버튼 생성
+   */
+  private createUpgradeButton(width: number, height: number): void {
+    const buttonX = width / 2;
+    const buttonY = height / 2 + 140;
+
+    const buttonBg = this.add.graphics();
+
+    // 그림자
+    buttonBg.fillStyle(0x000000, 0.4);
+    buttonBg.fillRoundedRect(-102, -27, 204, 54, 14);
+
+    // 메인 배경 - 녹색 테마
+    buttonBg.fillStyle(0x1a3a2a, 1);
+    buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+
+    // 보더 - 녹색
+    buttonBg.lineStyle(2, 0x4ade80, 1);
+    buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+
+    // 상단 하이라이트
+    buttonBg.fillStyle(0x4ade80, 0.5);
+    buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+
+    const button = this.add.container(buttonX, buttonY);
+    button.add(buttonBg);
+
+    // 버튼 텍스트
+    const buttonText = this.add.text(0, 0, '⬆ 영구 강화', {
+      fontSize: '20px',
+      color: '#bbf7d0',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", sans-serif',
+      fontStyle: 'bold',
+      stroke: '#0a2a1a',
+      strokeThickness: 3
+    });
+    buttonText.setOrigin(0.5);
+    button.add(buttonText);
+
+    // 키 힌트
+    const keyHint = this.add.text(70, 0, '[U]', {
+      fontSize: '14px',
+      color: '#4ade80',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold'
+    });
+    keyHint.setOrigin(0.5);
+    button.add(keyHint);
+
+    // 골드 표시
+    const gold = MetaProgressionManager.getGold();
+    this.upgradeGoldText = this.add.text(0, 32, `🪙 ${gold.toLocaleString()}`, {
+      fontSize: '14px',
+      color: '#FFD700',
+      fontFamily: '"Courier New", monospace',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    this.upgradeGoldText.setOrigin(0.5);
+    button.add(this.upgradeGoldText);
+
+    button.setSize(200, 50);
+
+    (button as any).setInteractive({ useHandCursor: true })
+      .on('pointerover', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x000000, 0.5);
+        buttonBg.fillRoundedRect(-104, -29, 208, 58, 14);
+        buttonBg.fillStyle(0x2a4a3a, 1);
+        buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.lineStyle(3, 0xbbf7d0, 1);
+        buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.fillStyle(0xbbf7d0, 0.7);
+        buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+        buttonText.setScale(1.05);
+        keyHint.setColor('#bbf7d0');
+      })
+      .on('pointerout', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x000000, 0.4);
+        buttonBg.fillRoundedRect(-102, -27, 204, 54, 14);
+        buttonBg.fillStyle(0x1a3a2a, 1);
+        buttonBg.fillRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.lineStyle(2, 0x4ade80, 1);
+        buttonBg.strokeRoundedRect(-100, -25, 200, 50, 12);
+        buttonBg.fillStyle(0x4ade80, 0.5);
+        buttonBg.fillRoundedRect(-100, -25, 200, 3, { tl: 12, tr: 12, bl: 0, br: 0 });
+        buttonText.setScale(1);
+        keyHint.setColor('#4ade80');
+      })
+      .on('pointerdown', () => {
+        buttonBg.clear();
+        buttonBg.fillStyle(0x0a2a1a, 1);
+        buttonBg.fillRoundedRect(-98, -23, 196, 46, 10);
+        buttonBg.lineStyle(2, 0x4ade80, 1);
+        buttonBg.strokeRoundedRect(-98, -23, 196, 46, 10);
+        this.time.delayedCall(100, () => this.toggleUpgrades());
+      });
+
+    // 플로팅 애니메이션
+    this.tweens.add({
+      targets: button,
+      y: buttonY - 5,
+      duration: 2500,
+      yoyo: true,
+      repeat: -1,
+      ease: Phaser.Math.Easing.Sine.InOut
+    });
+  }
+
+  /**
+   * 강화 팝업 토글
+   */
+  private toggleUpgrades(): void {
+    if (this.isUpgradeVisible) {
+      this.hideUpgrades();
+    } else {
+      this.showUpgrades();
+    }
+  }
+
+  private showUpgrades(): void {
+    if (this.isUpgradeVisible) return;
+
+    this.upgradePopup = new UpgradePopup(this);
+    this.upgradePopup.show();
+    this.isUpgradeVisible = true;
+
+    // 키보드 핸들러
+    this.upgradeKeyHandler = () => {
+      if (this.isUpgradeVisible) {
+        this.hideUpgrades();
+      }
+    };
+    this.input.keyboard!.on('keydown-ESC', this.upgradeKeyHandler);
+  }
+
+  private hideUpgrades(): void {
+    if (!this.isUpgradeVisible || !this.upgradePopup) return;
+
+    if (this.upgradeKeyHandler) {
+      this.input.keyboard!.off('keydown-ESC', this.upgradeKeyHandler);
+      this.upgradeKeyHandler = null;
+    }
+
+    this.upgradePopup.hide();
+    this.isUpgradeVisible = false;
+
+    // 골드 텍스트 업데이트
+    if (this.upgradeGoldText) {
+      const gold = MetaProgressionManager.getGold();
+      this.upgradeGoldText.setText(`🪙 ${gold.toLocaleString()}`);
+    }
+
+    this.time.delayedCall(300, () => {
+      this.upgradePopup = null;
+    });
+  }
+
+  /**
+   * 메인 랭킹 버튼 생성 (강화 버튼 아래)
    */
   private createMainRankingButton(width: number, height: number): void {
     const buttonX = width / 2;
-    const buttonY = height / 2 + 160;
+    const buttonY = height / 2 + 195;
 
     const buttonBg = this.add.graphics();
 

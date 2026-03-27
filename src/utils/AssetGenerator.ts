@@ -1088,6 +1088,7 @@ export class AssetGenerator {
   private generateItemSprites(): void {
     this.generateGemSprites();
     this.generateHeartSprite();
+    this.generateGoldCoinSprite();
   }
 
   /**
@@ -1179,6 +1180,50 @@ export class AssetGenerator {
     ctx.beginPath();
     ctx.arc(centerX - 4, centerY - 6, 2, 0, Math.PI * 2);
     ctx.fill();
+
+    canvas.refresh();
+  }
+
+  /**
+   * 골드 코인
+   */
+  private generateGoldCoinSprite(): void {
+    const key = 'gold_coin';
+    if (this.scene.textures.exists(key)) return;
+
+    const size = 16;
+    const canvas = this.scene.textures.createCanvas(key, size, size);
+
+    if (!canvas) return;
+
+    const ctx = canvas.getContext();
+    const centerX = size / 2;
+    const centerY = size / 2;
+
+    // 코인 외곽 (어두운 금색)
+    ctx.fillStyle = '#B8860B';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 코인 메인 (밝은 금색)
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 하이라이트
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc(centerX - 2, centerY - 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 중앙 G 마크
+    ctx.fillStyle = '#B8860B';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('G', centerX + 0.5, centerY + 0.5);
 
     canvas.refresh();
   }
