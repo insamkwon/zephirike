@@ -28,8 +28,6 @@ import {
   LEVEL_UP_CHOICES,
   HEALTH_DROP_CHANCE,
   HEALTH_DROP_SCALING_INTERVAL,
-  DAMAGE_OVERLAY_ALPHA,
-  DAMAGE_OVERLAY_FADE_MS,
 } from '../config/constants';
 
 export class GameScene extends Phaser.Scene {
@@ -42,7 +40,6 @@ export class GameScene extends Phaser.Scene {
   private minimap!: Minimap;
   private vfx!: VFX;
   private levelUpUI: LevelUpUI | null = null;
-  private damageOverlay!: Phaser.GameObjects.Rectangle;
   private gameTimer = 0;
   private paused = false;
   private gameOver = false;
@@ -166,7 +163,7 @@ export class GameScene extends Phaser.Scene {
     // Bone projectiles update
     this.bonePool.update(delta, this.player.x, this.player.y, (dmg) => {
       this.player.takeDamage(dmg);
-      this.flashDamageOverlay();
+      this.vfx.flashDamage();
       soundEngine.playerHit();
     });
 
@@ -195,11 +192,6 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 1, 1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.damageOverlay = this.add.rectangle(
-      this.cameras.main.width / 2, this.cameras.main.height / 2,
-      this.cameras.main.width, this.cameras.main.height,
-      0xff0000, 0
-    ).setScrollFactor(0).setDepth(200);
   }
 
   private createSystems(): void {
@@ -223,7 +215,7 @@ export class GameScene extends Phaser.Scene {
         if (!enemy.active) return;
         this.totalDamageTaken += enemy.damage;
         this.player.takeDamage(enemy.damage);
-        this.flashDamageOverlay();
+        this.vfx.flashDamage();
         this.vfx.shake(0.003, 80);
         soundEngine.playerHit();
       },
@@ -280,7 +272,7 @@ export class GameScene extends Phaser.Scene {
       const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
       if (dist < radius) {
         this.player.takeDamage(damage);
-        this.flashDamageOverlay();
+        this.vfx.flashDamage();
         this.vfx.shake(0.008, 200);
       }
     });
@@ -404,7 +396,7 @@ export class GameScene extends Phaser.Scene {
     this.paused = true;
     this.physics.pause();
     soundEngine.levelUp();
-    this.vfx.screenFlash(0xffdd44, 0.3, 200);
+    this.vfx.levelUpBloom();
 
     // XP vacuum — pull all drops toward player
     this.dropManager.vacuumAll();
@@ -662,10 +654,6 @@ export class GameScene extends Phaser.Scene {
     if (ctx && dest && !soundEngine.isMuted) bgm.start(ctx, dest);
   }
 
-  private flashDamageOverlay(): void {
-    this.damageOverlay.setAlpha(DAMAGE_OVERLAY_ALPHA);
-    this.tweens.add({ targets: this.damageOverlay, alpha: 0, duration: DAMAGE_OVERLAY_FADE_MS });
-  }
 
   private formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
