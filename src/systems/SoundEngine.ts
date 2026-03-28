@@ -117,6 +117,26 @@ export class SoundEngine {
     this.playNoise(0.3, 0.1, 0.6);
   }
 
+  victory(): void {
+    const notes = [523, 659, 784, 1047, 1319, 1568];
+    notes.forEach((freq, i) => {
+      this.playTone(freq, 0.3, 'sine', 0.2, 0, i * 0.12);
+      this.playTone(freq * 1.005, 0.3, 'sine', 0.1, 0, i * 0.12);
+    });
+  }
+
+  death(): void {
+    this.playSweep(400, 80, 0.5, 'sawtooth', 0.3);
+    this.playTone(80, 0.4, 'square', 0.2, 0, 0.3);
+    this.playNoise(0.4, 0.15, 0.5);
+  }
+
+  reroll(): void {
+    this.playTone(600, 0.06, 'sine', 0.12);
+    this.playTone(500, 0.06, 'sine', 0.1, 0, 0.06);
+    this.playTone(600, 0.06, 'sine', 0.12, 0, 0.12);
+  }
+
   goldPickup(): void {
     this.playTone(1200, 0.05, 'sine', 0.12);
     this.playTone(1500, 0.05, 'sine', 0.1, 0, 0.05);

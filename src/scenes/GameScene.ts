@@ -17,6 +17,8 @@ import { addGold, getMetaBonuses } from '../config/metaConfig';
 import { PASSIVES } from '../config/passiveConfig';
 import { WeaponDef } from '../config/weaponConfig';
 import { TEXT_STYLES } from '../config/styles';
+import { EVOLUTIONS } from '../config/evolutionConfig';
+import { unlockCharacter } from '../config/characterConfig';
 import {
   WORLD_WIDTH, WORLD_HEIGHT,
   GAME_DURATION_SECONDS,
@@ -42,6 +44,8 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   private gameOver = false;
   private startingWeapon = 'magic_bolt';
+  private charBonuses: { hpMul: number; speedMul: number; damageMul: number; cooldownMul: number; magnetMul: number } =
+    { hpMul: 1, speedMul: 1, damageMul: 1, cooldownMul: 1, magnetMul: 1 };
   private goldEarned = 0;
   private lastKillMilestone = 0;
   private bossWarningShown = new Set<number>();
@@ -58,8 +62,20 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  init(data: { startingWeapon?: string }): void {
-    this.startingWeapon = data.startingWeapon ?? 'magic_bolt';
+  init(data: { character?: import('../config/characterConfig').CharacterDef; startingWeapon?: string }): void {
+    if (data.character) {
+      this.startingWeapon = data.character.startingWeapon;
+      this.charBonuses = {
+        hpMul: data.character.hpMul,
+        speedMul: data.character.speedMul,
+        damageMul: data.character.damageMul,
+        cooldownMul: data.character.cooldownMul,
+        magnetMul: data.character.magnetMul,
+      };
+    } else {
+      this.startingWeapon = data.startingWeapon ?? 'magic_bolt';
+      this.charBonuses = { hpMul: 1, speedMul: 1, damageMul: 1, cooldownMul: 1, magnetMul: 1 };
+    }
     this.gameTimer = 0;
     this.paused = false;
     this.gameOver = false;
@@ -75,8 +91,18 @@ export class GameScene extends Phaser.Scene {
     soundEngine.init();
     this.vfx = new VFX(this);
 
-    const bonuses = getMetaBonuses();
+    const meta = getMetaBonuses();
+    // Combine meta + character bonuses
+    const bonuses = {
+      bonusHp: meta.bonusHp,
+      speedMul: meta.speedMul * this.charBonuses.speedMul,
+      damageMul: meta.damageMul * this.charBonuses.damageMul,
+      xpMul: meta.xpMul,
+      magnetMul: meta.magnetMul * this.charBonuses.magnetMul,
+    };
     this.xpMul = bonuses.xpMul;
+    // Apply character HP multiplier
+    bonuses.bonusHp = Math.floor((100 * this.charBonuses.hpMul - 100) + bonuses.bonusHp);
 
     this.setupWorld(bonuses);
     this.createSystems();
@@ -119,7 +145,7 @@ export class GameScene extends Phaser.Scene {
     const passiveStr = Array.from(this.ownedPassives.entries())
       .map(([id, lv]) => `${PASSIVES[id].icon}${lv}`)
       .join(' ');
-    const evoReady = !!this.weaponManager.getAvailableEvolution();
+    const evoReady = !!this.weaponManager.getAvailableEvolution(this.ownedPassives);
 
     this.hud.update(elapsed, weaponStr, this.goldEarned, passiveStr, evoReady);
     this.checkKillStreak();
@@ -333,7 +359,7 @@ export class GameScene extends Phaser.Scene {
     this.dropManager.vacuumAll();
 
     // Check evolution
-    const evo = this.weaponManager.getAvailableEvolution();
+    const evo = this.weaponManager.getAvailableEvolution(this.ownedPassives);
     if (evo) {
       this.showEvolution(evo);
       return;
@@ -385,7 +411,7 @@ export class GameScene extends Phaser.Scene {
     return options.slice(0, count);
   }
 
-  private showEvolution(evo: { weapon1: string; weapon2: string; resultDef: WeaponDef }): void {
+  private showEvolution(evo: { weapon: string; resultDef: WeaponDef }): void {
     soundEngine.evolution();
     this.vfx.evolutionGlow(this.player.x, this.player.y);
 
@@ -412,7 +438,7 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard!.off('keydown', handler);
       this.input.off('pointerdown', handler);
       elements.forEach(e => e.destroy());
-      this.weaponManager.evolve(evo.weapon1, evo.weapon2, evo.resultDef);
+      this.weaponManager.evolve(evo.weapon, evo.resultDef);
       this.paused = false;
       this.physics.resume();
     };
@@ -538,6 +564,22 @@ export class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.physics.pause();
     bgm.stop();
+
+    // Achievement checks
+    if (this.player.kills >= 500) unlockCharacter('rogue');
+    const hasEvolved = this.weaponManager.weapons.some(w =>
+      EVOLUTIONS.some(e => e.result.id === w.id)
+    );
+    if (hasEvolved) unlockCharacter('warlock');
+
+    // Fanfare
+    if (victory) {
+      soundEngine.victory();
+      this.vfx.screenFlash(0xffdd44, 0.5, 600);
+    } else {
+      soundEngine.death();
+      this.vfx.shake(0.01, 400);
+    }
 
     const timeStr = this.formatTime(Math.floor(this.gameTimer));
     const prevBest = parseInt(localStorage.getItem('zephirike_best_kills') ?? '0');

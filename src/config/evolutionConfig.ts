@@ -1,19 +1,21 @@
 import { WeaponDef } from './weaponConfig';
 
 export interface EvolutionRecipe {
-  weapon1: string;
-  weapon2: string;
+  /** Primary weapon — must be at max level */
+  weapon: string;
+  /** Required passive — any level */
+  passive: string;
   result: WeaponDef;
 }
 
 /**
- * When both weapons reach max level, they can evolve into a super weapon.
- * Presented as a special option during level-up.
+ * Evolution: max-level weapon + specific passive = super weapon.
+ * Much more accessible than requiring two max-level weapons.
  */
 export const EVOLUTIONS: EvolutionRecipe[] = [
   {
-    weapon1: 'magic_bolt',
-    weapon2: 'lightning',
+    weapon: 'magic_bolt',
+    passive: 'haste',
     result: {
       id: 'arcane_storm',
       name: 'Arcane Storm',
@@ -29,8 +31,8 @@ export const EVOLUTIONS: EvolutionRecipe[] = [
     },
   },
   {
-    weapon1: 'whip',
-    weapon2: 'garlic',
+    weapon: 'whip',
+    passive: 'might',
     result: {
       id: 'soul_eater',
       name: 'Soul Eater',
@@ -46,19 +48,70 @@ export const EVOLUTIONS: EvolutionRecipe[] = [
     },
   },
   {
-    weapon1: 'holy_water',
-    weapon2: 'orb',
+    weapon: 'garlic',
+    passive: 'recovery',
+    result: {
+      id: 'soul_drain',
+      name: 'Soul Drain',
+      type: 'area',
+      icon: '💜',
+      color: 0xaa44aa,
+      maxLevel: 1,
+      levels: [{
+        damage: 25, cooldown: 1200, count: 1, pierce: 99, area: 160,
+        speed: 0, duration: 3000,
+        description: 'Drains life from all nearby enemies, healing you',
+      }],
+    },
+  },
+  {
+    weapon: 'holy_water',
+    passive: 'luck',
+    result: {
+      id: 'divine_flood',
+      name: 'Divine Flood',
+      type: 'area',
+      icon: '🌊',
+      color: 0x2288ff,
+      maxLevel: 1,
+      levels: [{
+        damage: 35, cooldown: 2000, count: 4, pierce: 99, area: 100,
+        speed: 0, duration: 4000,
+        description: '4 massive holy pools that slow and devastate',
+      }],
+    },
+  },
+  {
+    weapon: 'orb',
+    passive: 'armor',
     result: {
       id: 'divine_shield',
       name: 'Divine Shield',
       type: 'orbit',
-      icon: '🛡️',
+      icon: '✨',
       color: 0x44ffff,
       maxLevel: 1,
       levels: [{
         damage: 30, cooldown: 0, count: 6, pierce: 99, area: 120,
         speed: 200, duration: 0,
         description: '6 divine orbs that obliterate everything they touch',
+      }],
+    },
+  },
+  {
+    weapon: 'lightning',
+    passive: 'might',
+    result: {
+      id: 'thunder_god',
+      name: 'Thunder God',
+      type: 'projectile',
+      icon: '⛈️',
+      color: 0xffff00,
+      maxLevel: 1,
+      levels: [{
+        damage: 80, cooldown: 800, count: 6, pierce: 3, area: 0,
+        speed: 800, duration: 0,
+        description: 'Rains divine lightning across the battlefield',
       }],
     },
   },
