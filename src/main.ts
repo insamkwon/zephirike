@@ -1,31 +1,29 @@
 import Phaser from 'phaser';
+import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
-import { LevelUpScene } from './scenes/LevelUpScene';
-import { HighScoreScene } from './scenes/HighScoreScene';
+import { GameOverScene } from './scenes/GameOverScene';
+import { GAME_WIDTH, GAME_HEIGHT } from './config/constants';
 
-/**
- * Main entry point for Zephirike game
- */
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
+  width: GAME_WIDTH,
+  height: GAME_HEIGHT,
   parent: 'game-container',
-  backgroundColor: '#111122',
-  scene: [MenuScene, GameScene, LevelUpScene, HighScoreScene],
+  backgroundColor: '#0a0a1a',
+  scene: [BootScene, MenuScene, GameScene, GameOverScene],
   physics: {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: 0 },
-      debug: false
-    }
+      debug: false,
+    },
   },
   scale: {
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  }
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
+  pixelArt: true,
 };
 
-// Initialize game
 new Phaser.Game(config);
