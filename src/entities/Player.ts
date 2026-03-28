@@ -4,6 +4,9 @@ import {
   PLAYER_MAX_HP,
   PLAYER_INVINCIBILITY_MS,
   DAMAGE_FLASH_DURATION,
+  DIAGONAL_FACTOR,
+  XP_BASE_REQUIRED,
+  XP_GROWTH_FACTOR,
 } from '../config/constants';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -16,13 +19,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   facingRight: boolean;
   invincible: boolean;
   private speed: number;
-  private cursors!: {
+  private lastMoveX: number;
+  private wasd: {
     up: Phaser.Input.Keyboard.Key;
     down: Phaser.Input.Keyboard.Key;
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
-  private lastMoveX: number;
+  private arrows: Phaser.Types.Input.Keyboard.CursorKeys;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player');
@@ -36,7 +40,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.maxHp = PLAYER_MAX_HP;
     this.level = 1;
     this.xp = 0;
-    this.xpToNext = 10;
+    this.xpToNext = XP_BASE_REQUIRED;
     this.kills = 0;
     this.facingRight = true;
     this.invincible = false;
@@ -44,47 +48,31 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.lastMoveX = 1;
 
     const kb = scene.input.keyboard!;
-    this.cursors = {
+    this.wasd = {
       up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
-    // Also allow arrow keys
-    const arrows = scene.input.keyboard!.createCursorKeys();
-    this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-
-    this.cursors = {
-      up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
-
-    this.arrowKeys = arrows;
+    this.arrows = kb.createCursorKeys();
   }
-
-  private arrowKeys!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   update(): void {
     let vx = 0;
     let vy = 0;
 
-    if (this.cursors.left.isDown || this.arrowKeys.left.isDown) vx -= 1;
-    if (this.cursors.right.isDown || this.arrowKeys.right.isDown) vx += 1;
-    if (this.cursors.up.isDown || this.arrowKeys.up.isDown) vy -= 1;
-    if (this.cursors.down.isDown || this.arrowKeys.down.isDown) vy += 1;
+    if (this.wasd.left.isDown || this.arrows.left.isDown) vx -= 1;
+    if (this.wasd.right.isDown || this.arrows.right.isDown) vx += 1;
+    if (this.wasd.up.isDown || this.arrows.up.isDown) vy -= 1;
+    if (this.wasd.down.isDown || this.arrows.down.isDown) vy += 1;
 
-    // Normalize diagonal
     if (vx !== 0 && vy !== 0) {
-      const f = 0.7071; // 1/sqrt(2)
-      vx *= f;
-      vy *= f;
+      vx *= DIAGONAL_FACTOR;
+      vy *= DIAGONAL_FACTOR;
     }
 
     this.setVelocity(vx * this.speed, vy * this.speed);
 
-    // Track facing direction
     if (vx !== 0) {
       this.lastMoveX = vx;
       this.facingRight = vx > 0;
@@ -92,7 +80,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  /** Returns normalized facing direction */
   getFacingDir(): { x: number; y: number } {
     return { x: this.lastMoveX > 0 ? 1 : -1, y: 0 };
   }
@@ -104,7 +91,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.invincible = true;
     this.setAlpha(0.5);
 
-    // Flash effect
     this.setTint(0xff0000);
     this.scene.time.delayedCall(DAMAGE_FLASH_DURATION, () => {
       this.clearTint();
@@ -124,13 +110,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
+  /** Returns true if player leveled up */
   addXp(amount: number): boolean {
     this.xp += amount;
     if (this.xp >= this.xpToNext) {
       this.xp -= this.xpToNext;
       this.level++;
-      this.xpToNext = Math.floor(10 * Math.pow(1.3, this.level - 1));
-      return true; // leveled up
+      this.xpToNext = Math.floor(XP_BASE_REQUIRED * Math.pow(XP_GROWTH_FACTOR, this.level - 1));
+      return true;
     }
     return false;
   }

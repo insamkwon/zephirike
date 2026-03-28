@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
 import { EnemyDef } from '../config/enemyConfig';
+import { ENEMY_KNOCKBACK_SPEED, ENEMY_DAMAGE_FLASH_MS } from '../config/constants';
+
+let nextEnemyId = 1;
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  readonly uid: number;
   enemyDef: EnemyDef;
   hp: number;
   maxHp: number;
@@ -15,6 +19,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.uid = nextEnemyId++;
     this.enemyDef = def;
     this.maxHp = Math.floor(def.hp * hpMul);
     this.hp = this.maxHp;
@@ -23,7 +28,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.speed = def.speed * speedMul;
 
     this.setDepth(5);
-    // Body size based on enemy
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCircle(def.size, -def.size + 8, -def.size + 8);
   }
@@ -34,8 +38,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       Math.cos(angle) * this.speed,
       Math.sin(angle) * this.speed
     );
-
-    // Flip sprite based on direction
     this.setFlipX(playerX < this.x);
   }
 
@@ -47,30 +49,30 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.damageTween) this.damageTween.stop();
     this.damageTween = this.scene.tweens.add({
       targets: this,
-      duration: 80,
+      duration: ENEMY_DAMAGE_FLASH_MS,
       onComplete: () => {
         if (this.active) this.clearTint();
       },
     });
 
-    // Knockback
+    // Knockback — reverse current velocity briefly
     const body = this.body as Phaser.Physics.Arcade.Body;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
     const mag = Math.sqrt(vx * vx + vy * vy) || 1;
-    body.setVelocity((-vx / mag) * 100, (-vy / mag) * 100);
-    this.scene.time.delayedCall(100, () => {
-      // Resume chase on next frame
-    });
+    body.setVelocity(
+      (-vx / mag) * ENEMY_KNOCKBACK_SPEED,
+      (-vy / mag) * ENEMY_KNOCKBACK_SPEED
+    );
 
     if (this.hp <= 0) {
       this.die();
-      return true; // killed
+      return true;
     }
     return false;
   }
 
-  die(): void {
+  private die(): void {
     this.scene.events.emit('enemy-killed', this);
     this.destroy();
   }

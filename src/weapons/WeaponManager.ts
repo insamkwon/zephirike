@@ -1,51 +1,59 @@
 import Phaser from 'phaser';
 import { WEAPONS, WeaponDef } from '../config/weaponConfig';
+import {
+  PROJECTILE_POOL_SIZE,
+  PROJECTILE_OFFSCREEN_MARGIN,
+  PROJECTILE_SPREAD_ANGLE,
+  ORB_HIT_RADIUS,
+  ORB_ANGULAR_SPEED_FACTOR,
+  MELEE_VISUAL_HEIGHT,
+  AREA_TICK_MS,
+  AREA_OFFSET_RANGE,
+  AREA_FADE_MS,
+} from '../config/constants';
 import { Player } from '../entities/Player';
 import { Projectile } from './Projectile';
-import { Enemy } from '../entities/Enemy';
+import { EnemyPool } from '../systems/EnemyPool';
+
 
 export interface OwnedWeapon {
   id: string;
-  level: number; // 0-indexed
+  level: number;
   def: WeaponDef;
   lastFired: number;
   orbs?: Phaser.GameObjects.Sprite[];
 }
 
+/**
+ * Manages all player weapons.
+ * Delegates spatial queries to EnemyPool to avoid redundant O(n) scans.
+ */
 export class WeaponManager {
-  scene: Phaser.Scene;
-  player: Player;
+  private scene: Phaser.Scene;
+  private player: Player;
+  private enemyPool: EnemyPool;
   weapons: OwnedWeapon[];
   projectiles: Phaser.Physics.Arcade.Group;
-  enemies: Phaser.Physics.Arcade.Group;
-  private areaEffects: Phaser.GameObjects.Group;
 
-  constructor(scene: Phaser.Scene, player: Player, enemies: Phaser.Physics.Arcade.Group) {
+  constructor(scene: Phaser.Scene, player: Player, enemyPool: EnemyPool) {
     this.scene = scene;
     this.player = player;
+    this.enemyPool = enemyPool;
     this.weapons = [];
-    this.enemies = enemies;
 
-    // Projectile pool
     this.projectiles = scene.physics.add.group({
       classType: Projectile,
-      maxSize: 100,
+      maxSize: PROJECTILE_POOL_SIZE,
       runChildUpdate: false,
     });
-
-    this.areaEffects = scene.add.group();
   }
 
   addWeapon(weaponId: string): void {
     const existing = this.weapons.find(w => w.id === weaponId);
     if (existing) {
-      // Level up existing weapon
       if (existing.level < existing.def.maxLevel - 1) {
         existing.level++;
-        // Rebuild orbs if orbit weapon
-        if (existing.def.type === 'orbit') {
-          this.rebuildOrbs(existing);
-        }
+        if (existing.def.type === 'orbit') this.rebuildOrbs(existing);
       }
       return;
     }
@@ -53,209 +61,159 @@ export class WeaponManager {
     const def = WEAPONS[weaponId];
     if (!def) return;
 
-    const owned: OwnedWeapon = {
-      id: weaponId,
-      level: 0,
-      def,
-      lastFired: 0,
-    };
+    const owned: OwnedWeapon = { id: weaponId, level: 0, def, lastFired: 0 };
     this.weapons.push(owned);
 
-    if (def.type === 'orbit') {
-      this.rebuildOrbs(owned);
-    }
-  }
-
-  getWeaponLevel(weaponId: string): number {
-    const w = this.weapons.find(w => w.id === weaponId);
-    return w ? w.level : -1;
+    if (def.type === 'orbit') this.rebuildOrbs(owned);
   }
 
   private rebuildOrbs(weapon: OwnedWeapon): void {
-    // Destroy old orbs
-    if (weapon.orbs) {
-      weapon.orbs.forEach(o => o.destroy());
-    }
+    if (weapon.orbs) weapon.orbs.forEach(o => o.destroy());
     const stats = weapon.def.levels[weapon.level];
     weapon.orbs = [];
     for (let i = 0; i < stats.count; i++) {
       const orb = this.scene.add.sprite(this.player.x, this.player.y, 'orb');
       orb.setDepth(9);
       orb.setData('angle', (i / stats.count) * Math.PI * 2);
-      orb.setData('weaponId', weapon.id);
       weapon.orbs.push(orb);
     }
   }
 
-  update(time: number, _delta: number): void {
+  update(time: number): void {
     for (const weapon of this.weapons) {
       const stats = weapon.def.levels[weapon.level];
+      const type = weapon.def.type;
 
-      switch (weapon.def.type) {
-        case 'projectile':
-          if (time - weapon.lastFired >= stats.cooldown) {
-            weapon.lastFired = time;
-            this.fireProjectile(weapon);
-          }
-          break;
-        case 'melee':
-          if (time - weapon.lastFired >= stats.cooldown) {
-            weapon.lastFired = time;
-            this.fireMelee(weapon);
-          }
-          break;
-        case 'area':
-          if (time - weapon.lastFired >= stats.cooldown) {
-            weapon.lastFired = time;
-            this.fireArea(weapon);
-          }
-          break;
-        case 'orbit':
-          this.updateOrbit(weapon, time);
-          break;
+      if (type === 'orbit') {
+        this.updateOrbit(weapon);
+        continue;
+      }
+
+      // Cooldown-based weapons
+      if (time - weapon.lastFired < stats.cooldown) continue;
+      weapon.lastFired = time;
+
+      switch (type) {
+        case 'projectile': this.fireProjectile(weapon); break;
+        case 'melee': this.fireMelee(weapon); break;
+        case 'area': this.fireArea(weapon); break;
       }
     }
 
-    // Check projectile-enemy overlap via scene (done in GameScene)
-    // Clean up off-screen projectiles
-    this.projectiles.getChildren().forEach((p) => {
-      const proj = p as Projectile;
-      if (!proj.active) return;
-      const cam = this.scene.cameras.main;
-      const margin = 200;
-      if (
-        proj.x < cam.scrollX - margin ||
-        proj.x > cam.scrollX + cam.width + margin ||
-        proj.y < cam.scrollY - margin ||
-        proj.y > cam.scrollY + cam.height + margin
-      ) {
-        proj.deactivate();
-      }
-    });
+    this.cleanupProjectiles();
   }
+
+  // ── Projectile ──
 
   private fireProjectile(weapon: OwnedWeapon): void {
     const stats = weapon.def.levels[weapon.level];
-    const living = this.enemies.getChildren().filter(e => (e as Enemy).active) as Enemy[];
-    if (living.length === 0) return;
-
-    // Sort by distance
-    living.sort((a, b) =>
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) -
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
-    );
+    const targets = this.enemyPool.getClosest(this.player.x, this.player.y, stats.count);
+    if (targets.length === 0) return;
 
     for (let i = 0; i < stats.count; i++) {
-      const target = living[i % living.length];
+      const target = targets[i % targets.length];
       const angle = Phaser.Math.Angle.Between(
-        this.player.x, this.player.y,
-        target.x, target.y
+        this.player.x, this.player.y, target.x, target.y
       );
+      const spread = stats.count > 1
+        ? (i - (stats.count - 1) / 2) * PROJECTILE_SPREAD_ANGLE
+        : 0;
 
-      // Spread slightly for multiple projectiles
-      const spread = stats.count > 1 ? (i - (stats.count - 1) / 2) * 0.15 : 0;
-
-      const proj = this.projectiles.get(this.player.x, this.player.y, `proj_${weapon.id}`) as Projectile | null;
+      const proj = this.projectiles.get(
+        this.player.x, this.player.y, `proj_${weapon.id}`
+      ) as Projectile | null;
       if (proj) {
-        proj.fire(
-          this.player.x, this.player.y,
-          angle + spread,
-          stats.speed,
-          stats.damage,
-          stats.pierce
-        );
+        proj.fire(this.player.x, this.player.y, angle + spread, stats.speed, stats.damage, stats.pierce);
       }
     }
   }
+
+  // ── Melee ──
 
   private fireMelee(weapon: OwnedWeapon): void {
     const stats = weapon.def.levels[weapon.level];
     const dir = this.player.getFacingDir();
-
-    // Create melee hitbox visual
     const directions = stats.count >= 2 ? [1, -1] : [dir.x];
 
     for (const d of directions) {
       const hitX = this.player.x + d * stats.area * 0.5;
       const hitY = this.player.y;
 
-      // Visual slash effect
-      const slash = this.scene.add.rectangle(
-        hitX, hitY,
-        stats.area, 30,
-        weapon.def.color, 0.6
-      );
-      slash.setDepth(9);
-      this.scene.tweens.add({
-        targets: slash,
-        alpha: 0,
-        scaleY: 2,
-        duration: stats.duration,
-        onComplete: () => slash.destroy(),
-      });
+      // VFX: slash rectangle
+      this.showSlash(hitX, hitY, stats.area, weapon.def.color, stats.duration);
 
-      // Damage enemies in area
-      const living = this.enemies.getChildren().filter(e => (e as Enemy).active) as Enemy[];
-      for (const enemy of living) {
-        const dist = Phaser.Math.Distance.Between(hitX, hitY, enemy.x, enemy.y);
-        if (dist < stats.area) {
-          enemy.takeDamage(stats.damage);
-        }
+      // Damage enemies in range (single getNearby call)
+      const nearby = this.enemyPool.getNearby(hitX, hitY, stats.area);
+      for (const enemy of nearby) {
+        enemy.takeDamage(stats.damage);
       }
     }
   }
+
+  private showSlash(x: number, y: number, width: number, color: number, duration: number): void {
+    const slash = this.scene.add.rectangle(x, y, width, MELEE_VISUAL_HEIGHT, color, 0.6);
+    slash.setDepth(9);
+    this.scene.tweens.add({
+      targets: slash,
+      alpha: 0,
+      scaleY: 2,
+      duration,
+      onComplete: () => slash.destroy(),
+    });
+  }
+
+  // ── Area ──
 
   private fireArea(weapon: OwnedWeapon): void {
     const stats = weapon.def.levels[weapon.level];
 
     for (let i = 0; i < stats.count; i++) {
-      // Drop area at random nearby position or at player
-      const offsetX = stats.count > 1 ? Phaser.Math.Between(-100, 100) : 0;
-      const offsetY = stats.count > 1 ? Phaser.Math.Between(-100, 100) : 0;
+      const offsetX = stats.count > 1 ? Phaser.Math.Between(-AREA_OFFSET_RANGE, AREA_OFFSET_RANGE) : 0;
+      const offsetY = stats.count > 1 ? Phaser.Math.Between(-AREA_OFFSET_RANGE, AREA_OFFSET_RANGE) : 0;
       const ax = this.player.x + offsetX;
       const ay = this.player.y + offsetY;
 
-      // Visual pool
-      const pool = this.scene.add.circle(ax, ay, stats.area, weapon.def.color, 0.3);
-      pool.setDepth(2);
-
-      // Damage tick
-      const tickInterval = 500;
-      let elapsed = 0;
-      const timer = this.scene.time.addEvent({
-        delay: tickInterval,
-        repeat: Math.floor(stats.duration / tickInterval) - 1,
-        callback: () => {
-          elapsed += tickInterval;
-          const living = this.enemies.getChildren().filter(e => (e as Enemy).active) as Enemy[];
-          for (const enemy of living) {
-            const dist = Phaser.Math.Distance.Between(ax, ay, enemy.x, enemy.y);
-            if (dist < stats.area) {
-              enemy.takeDamage(stats.damage);
-            }
-          }
-          // Pulse effect
-          pool.setAlpha(0.15 + 0.15 * Math.sin(elapsed * 0.01));
-        },
-      });
-
-      // Cleanup
-      this.scene.time.delayedCall(stats.duration, () => {
-        timer.destroy();
-        this.scene.tweens.add({
-          targets: pool,
-          alpha: 0,
-          duration: 300,
-          onComplete: () => pool.destroy(),
-        });
-      });
+      this.spawnAreaPool(ax, ay, stats.area, stats.damage, stats.duration, weapon.def.color);
     }
   }
 
-  private updateOrbit(weapon: OwnedWeapon, _time: number): void {
+  private spawnAreaPool(
+    x: number, y: number, radius: number,
+    damage: number, duration: number, color: number
+  ): void {
+    const pool = this.scene.add.circle(x, y, radius, color, 0.3).setDepth(2);
+    let elapsed = 0;
+
+    const timer = this.scene.time.addEvent({
+      delay: AREA_TICK_MS,
+      repeat: Math.floor(duration / AREA_TICK_MS) - 1,
+      callback: () => {
+        elapsed += AREA_TICK_MS;
+        const nearby = this.enemyPool.getNearby(x, y, radius);
+        for (const enemy of nearby) {
+          enemy.takeDamage(damage);
+        }
+        pool.setAlpha(0.15 + 0.15 * Math.sin(elapsed * 0.01));
+      },
+    });
+
+    this.scene.time.delayedCall(duration, () => {
+      timer.destroy();
+      this.scene.tweens.add({
+        targets: pool,
+        alpha: 0,
+        duration: AREA_FADE_MS,
+        onComplete: () => pool.destroy(),
+      });
+    });
+  }
+
+  // ── Orbit ──
+
+  private updateOrbit(weapon: OwnedWeapon): void {
     if (!weapon.orbs) return;
     const stats = weapon.def.levels[weapon.level];
-    const angularSpeed = (stats.speed / 100) * 0.003; // radians per ms-ish
+    const angularSpeed = (stats.speed / 100) * ORB_ANGULAR_SPEED_FACTOR;
 
     for (const orb of weapon.orbs) {
       if (!orb.active) continue;
@@ -263,34 +221,48 @@ export class WeaponManager {
       angle += angularSpeed;
       orb.setData('angle', angle);
 
-      orb.setPosition(
-        this.player.x + Math.cos(angle) * stats.area,
-        this.player.y + Math.sin(angle) * stats.area
-      );
+      const ox = this.player.x + Math.cos(angle) * stats.area;
+      const oy = this.player.y + Math.sin(angle) * stats.area;
+      orb.setPosition(ox, oy);
 
-      // Check collision with enemies
-      const living = this.enemies.getChildren().filter(e => (e as Enemy).active) as Enemy[];
-      for (const enemy of living) {
-        const dist = Phaser.Math.Distance.Between(orb.x, orb.y, enemy.x, enemy.y);
-        if (dist < 20) {
-          enemy.takeDamage(stats.damage);
-        }
+      // Damage nearby enemies (single getNearby call per orb)
+      const hit = this.enemyPool.getNearby(ox, oy, ORB_HIT_RADIUS);
+      for (const enemy of hit) {
+        enemy.takeDamage(stats.damage);
       }
     }
   }
 
-  /** Get list of possible upgrades for level-up screen */
+  // ── Cleanup ──
+
+  private cleanupProjectiles(): void {
+    const cam = this.scene.cameras.main;
+    const margin = PROJECTILE_OFFSCREEN_MARGIN;
+    const left = cam.scrollX - margin;
+    const right = cam.scrollX + cam.width + margin;
+    const top = cam.scrollY - margin;
+    const bottom = cam.scrollY + cam.height + margin;
+
+    for (const p of this.projectiles.getChildren()) {
+      const proj = p as Projectile;
+      if (!proj.active) continue;
+      if (proj.x < left || proj.x > right || proj.y < top || proj.y > bottom) {
+        proj.deactivate();
+      }
+    }
+  }
+
+  // ── Upgrade Options ──
+
   getUpgradeOptions(count: number): Array<{ weaponId: string; nextLevel: number; isNew: boolean }> {
     const options: Array<{ weaponId: string; nextLevel: number; isNew: boolean }> = [];
 
-    // Existing weapons that can level up
     for (const w of this.weapons) {
       if (w.level < w.def.maxLevel - 1) {
         options.push({ weaponId: w.id, nextLevel: w.level + 1, isNew: false });
       }
     }
 
-    // New weapons not yet owned
     const ownedIds = new Set(this.weapons.map(w => w.id));
     for (const id of Object.keys(WEAPONS)) {
       if (!ownedIds.has(id)) {
@@ -298,9 +270,17 @@ export class WeaponManager {
       }
     }
 
-    // Shuffle and pick
     Phaser.Utils.Array.Shuffle(options);
     return options.slice(0, count);
+  }
+
+  /** Map of owned weapon defs for LevelUpUI */
+  getOwnedDefs(): Map<string, WeaponDef> {
+    const map = new Map<string, WeaponDef>();
+    for (const w of this.weapons) {
+      map.set(w.id, w.def);
+    }
+    return map;
   }
 
   destroy(): void {
@@ -308,6 +288,5 @@ export class WeaponManager {
       if (w.orbs) w.orbs.forEach(o => o.destroy());
     }
     this.projectiles.destroy(true);
-    this.areaEffects.destroy(true);
   }
 }
