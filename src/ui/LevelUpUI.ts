@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WEAPONS, WeaponDef } from '../config/weaponConfig';
 import { PASSIVES } from '../config/passiveConfig';
 import { LEVEL_UP_CHOICES } from '../config/constants';
+import { TEXT_STYLES } from '../config/styles';
 
 export interface UpgradeOption {
   weaponId: string;
@@ -49,10 +50,8 @@ export class LevelUpUI {
       .setScrollFactor(0).setDepth(300);
     this.elements.push(overlay);
 
-    const title = this.scene.add.text(w / 2, 80, `LEVEL UP! (Lv.${playerLevel})`, {
-      fontSize: '28px', fontFamily: 'monospace', color: '#ffdd44',
-      stroke: '#000', strokeThickness: 3,
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5);
+    const title = this.scene.add.text(w / 2, 80, `LEVEL UP! (Lv.${playerLevel})`, TEXT_STYLES.heading)
+      .setScrollFactor(0).setDepth(301).setOrigin(0.5);
     this.elements.push(title);
 
     const subtitle = this.scene.add.text(w / 2, 115, 'Choose an upgrade:', {

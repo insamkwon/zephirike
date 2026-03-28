@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getGold } from '../config/metaConfig';
+import { TEXT_STYLES } from '../config/styles';
 
 interface GameOverData {
   victory: boolean;
@@ -21,10 +22,7 @@ export class GameOverScene extends Phaser.Scene {
 
     const titleColor = data.victory ? '#44ff44' : '#ff4444';
     const titleText = data.victory ? 'VICTORY!' : 'GAME OVER';
-    this.add.text(cx, 60, titleText, {
-      fontSize: '48px', fontFamily: 'monospace', color: titleColor,
-      stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5);
+    this.add.text(cx, 60, titleText, { ...TEXT_STYLES.title, color: titleColor }).setOrigin(0.5);
 
     const subtitle = data.victory ? 'You survived the night!' : 'The darkness consumed you...';
     this.add.text(cx, 110, subtitle, {

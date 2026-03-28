@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { STARTING_WEAPONS, WEAPONS } from '../config/weaponConfig';
 import { META_UPGRADES, getGold, setGold, getUpgradeLevel, setUpgradeLevel } from '../config/metaConfig';
 import { soundEngine } from '../systems/SoundEngine';
+import { TEXT_STYLES } from '../config/styles';
 
 export class MenuScene extends Phaser.Scene {
   private selectedWeapon = 0;
@@ -19,10 +20,7 @@ export class MenuScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#0a0a1a');
 
     // Title
-    this.add.text(cx, 60, 'ZEPHIRIKE', {
-      fontSize: '48px', fontFamily: 'monospace', color: '#ff4444',
-      stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5);
+    this.add.text(cx, 60, 'ZEPHIRIKE', TEXT_STYLES.title).setOrigin(0.5);
 
     this.add.text(cx, 100, 'Vampire Survivors', {
       fontSize: '16px', fontFamily: 'monospace', color: '#666666',

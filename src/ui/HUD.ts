@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { GAME_DURATION_SECONDS } from '../config/constants';
+import { TEXT_STYLES } from '../config/styles';
 
 export class HUD {
   private scene: Phaser.Scene;
@@ -40,7 +41,7 @@ export class HUD {
     this.hpBarFill = this.scene.add.rectangle(21, 22, 118, 10, 0xff4444)
       .setScrollFactor(0).setDepth(d + 1).setOrigin(0, 0.5);
 
-    const textStyle = { fontSize: '12px', fontFamily: 'monospace', stroke: '#000000', strokeThickness: 2 };
+    const textStyle = TEXT_STYLES.hudLabel;
 
     // Level
     this.levelText = this.scene.add.text(10, 30, 'Lv.1', { ...textStyle, color: '#ffffff' })

@@ -16,6 +16,7 @@ import { bgm } from '../systems/BGM';
 import { addGold, getMetaBonuses } from '../config/metaConfig';
 import { PASSIVES } from '../config/passiveConfig';
 import { WeaponDef } from '../config/weaponConfig';
+import { TEXT_STYLES } from '../config/styles';
 import {
   WORLD_WIDTH, WORLD_HEIGHT,
   GAME_DURATION_SECONDS,
@@ -352,8 +353,7 @@ export class GameScene extends Phaser.Scene {
     elements.push(this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.8)
       .setScrollFactor(0).setDepth(300));
     elements.push(this.add.text(cam.width / 2, 100, 'WEAPON EVOLUTION!', {
-      fontSize: '32px', fontFamily: 'monospace', color: '#ffdd44',
-      stroke: '#000', strokeThickness: 4,
+      ...TEXT_STYLES.heading, fontSize: '32px',
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
     elements.push(this.add.text(cam.width / 2, 160, `${evo.resultDef.icon} ${evo.resultDef.name}`, {
       fontSize: '24px', fontFamily: 'monospace', color: '#ffffff',
@@ -426,10 +426,9 @@ export class GameScene extends Phaser.Scene {
         soundEngine.waveTransition();
         const cam = this.cameras.main;
         const waveNum = waveTimes.indexOf(t) + 2;
-        const text = this.add.text(cam.width / 2, cam.height * 0.25, `Wave ${waveNum}`, {
-          fontSize: '22px', fontFamily: 'monospace', color: '#ff8844',
-          stroke: '#000', strokeThickness: 3,
-        }).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
+        const text = this.add.text(cam.width / 2, cam.height * 0.25, `Wave ${waveNum}`,
+          TEXT_STYLES.announcement
+        ).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
         this.tweens.add({
           targets: text, alpha: 1, scale: { from: 0.5, to: 1 },
           duration: 400, hold: 800, yoyo: true,
@@ -458,14 +457,14 @@ export class GameScene extends Phaser.Scene {
     if (this.inHitstop) return;
     this.inHitstop = true;
     this.physics.pause();
-    this.time.timeScale = 0;
-    this.time.delayedCall(durationMs, () => {
+    // Use real setTimeout — Phaser's delayedCall respects timeScale,
+    // so it would never fire if we set timeScale to 0.
+    setTimeout(() => {
       this.inHitstop = false;
       if (!this.paused && !this.gameOver) {
         this.physics.resume();
-        this.time.timeScale = 1;
       }
-    });
+    }, durationMs);
   }
 
   // ── Pause ──

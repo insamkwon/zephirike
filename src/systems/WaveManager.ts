@@ -73,27 +73,18 @@ export class WaveManager {
       return;
     }
 
-    // Repeating timer: spawns one enemy per tick, up to entry.count
-    let spawned = 0;
+    // Single repeating timer spawns exactly entry.count enemies.
+    // startAt = delay so first callback fires immediately.
+    const hpMul = entry.hpMul ?? 1;
+    const speedMul = entry.speedMul ?? 1;
     wave.spawnTimer = this.scene.time.addEvent({
       delay: entry.interval,
       repeat: entry.count - 1,
+      startAt: entry.interval, // fires immediately on first tick
       callback: () => {
-        if (this.enemyPool.count < MAX_ENEMIES_ON_SCREEN) {
-          this.trySpawnEnemy(def, entry.hpMul ?? 1, entry.speedMul ?? 1);
-        }
-        spawned++;
-        if (spawned >= entry.count && wave.spawnTimer) {
-          wave.spawnTimer.destroy();
-          wave.spawnTimer = null;
-        }
+        this.trySpawnEnemy(def, hpMul, speedMul);
       },
     });
-
-    // Spawn first one immediately (timer fires after first delay)
-    if (this.enemyPool.count < MAX_ENEMIES_ON_SCREEN) {
-      this.trySpawnEnemy(def, entry.hpMul ?? 1, entry.speedMul ?? 1);
-    }
   }
 
   private trySpawnEnemy(def: EnemyDef, hpMul: number, speedMul: number): void {
