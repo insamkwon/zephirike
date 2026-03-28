@@ -28,6 +28,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   facingRight: boolean;
   invincible: boolean;
   magnetRange: number;
+  metaDamageMul: number;
 
   // Passive bonuses (accumulated during run)
   armorReduction = 0;
@@ -60,6 +61,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.hp = this.maxHp;
     this.speed = PLAYER_SPEED * b.speedMul;
     this.magnetRange = PLAYER_MAGNET_RANGE * b.magnetMul;
+    this.metaDamageMul = b.damageMul;
 
     this.level = 1;
     this.xp = 0;

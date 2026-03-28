@@ -1,23 +1,28 @@
 /**
  * Procedural sound engine using Web Audio API.
- * No external audio files needed — all sounds are synthesized.
+ * Exposes audio context for BGM integration — no internal casting needed.
  */
 export class SoundEngine {
   private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
+  private master: GainNode | null = null;
   private muted = false;
   volume = 0.3;
 
   init(): void {
+    if (this.ctx) return; // already initialized
     try {
       this.ctx = new AudioContext();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = this.volume;
-      this.masterGain.connect(this.ctx.destination);
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.volume;
+      this.master.connect(this.ctx.destination);
     } catch {
       // Web Audio not available
     }
   }
+
+  /** Public API for BGM and other subsystems */
+  getContext(): AudioContext | null { return this.ctx; }
+  getDestination(): GainNode | null { return this.master; }
 
   private ensureContext(): void {
     if (this.ctx?.state === 'suspended') {
@@ -25,10 +30,12 @@ export class SoundEngine {
     }
   }
 
+  get isMuted(): boolean { return this.muted; }
+
   toggleMute(): boolean {
     this.muted = !this.muted;
-    if (this.masterGain) {
-      this.masterGain.gain.value = this.muted ? 0 : this.volume;
+    if (this.master) {
+      this.master.gain.value = this.muted ? 0 : this.volume;
     }
     return this.muted;
   }
@@ -60,8 +67,7 @@ export class SoundEngine {
   }
 
   levelUp(): void {
-    const notes = [523, 659, 784, 1047];
-    notes.forEach((freq, i) => {
+    [523, 659, 784, 1047].forEach((freq, i) => {
       this.playTone(freq, 0.15, 'sine', 0.2, 0, i * 0.08);
     });
   }
@@ -80,9 +86,7 @@ export class SoundEngine {
         this.playTone(100, 0.15, 'sine', 0.08);
         this.playTone(150, 0.1, 'sine', 0.06, 0, 0.05);
         break;
-      case 'orbit':
-        // Orbit is continuous — no per-fire sound
-        break;
+      case 'orbit': break;
     }
   }
 
@@ -100,8 +104,7 @@ export class SoundEngine {
   }
 
   chestOpen(): void {
-    const notes = [392, 494, 587, 784, 988];
-    notes.forEach((freq, i) => {
+    [392, 494, 587, 784, 988].forEach((freq, i) => {
       this.playTone(freq, 0.12, 'sine', 0.2 - i * 0.03, 0, i * 0.06);
     });
   }
@@ -109,7 +112,7 @@ export class SoundEngine {
   evolution(): void {
     for (let i = 0; i < 6; i++) {
       this.playTone(300 + i * 150, 0.2, 'sine', 0.25, 0, i * 0.1);
-      this.playTone(300 + i * 150 + 5, 0.2, 'sine', 0.15, 0, i * 0.1);
+      this.playTone(305 + i * 150, 0.2, 'sine', 0.15, 0, i * 0.1);
     }
     this.playNoise(0.3, 0.1, 0.6);
   }
@@ -125,21 +128,18 @@ export class SoundEngine {
     freq: number, duration: number, type: OscillatorType,
     volume: number, detune = 0, delay = 0
   ): void {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.master) return;
     this.ensureContext();
-
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
     osc.frequency.value = freq;
     osc.detune.value = detune;
-
     const now = this.ctx.currentTime + delay;
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.master);
     osc.start(now);
     osc.stop(now + duration + 0.01);
   }
@@ -148,48 +148,39 @@ export class SoundEngine {
     startFreq: number, endFreq: number, duration: number,
     type: OscillatorType, volume: number
   ): void {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.master) return;
     this.ensureContext();
-
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
-
     const now = this.ctx.currentTime;
     osc.frequency.setValueAtTime(startFreq, now);
     osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.master);
     osc.start(now);
     osc.stop(now + duration + 0.01);
   }
 
   private playNoise(duration: number, volume: number, delay = 0): void {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.master) return;
     this.ensureContext();
-
     const bufferSize = Math.floor(this.ctx.sampleRate * duration);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     const gain = this.ctx.createGain();
     const now = this.ctx.currentTime + delay;
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
     source.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.master);
     source.start(now);
   }
 }
 
-/** Global singleton */
 export const soundEngine = new SoundEngine();

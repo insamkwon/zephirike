@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { EnemyDef } from '../config/enemyConfig';
-import { ENEMY_KNOCKBACK_SPEED, ENEMY_DAMAGE_FLASH_MS } from '../config/constants';
+import { ENEMY_KNOCKBACK_SPEED, ENEMY_DAMAGE_FLASH_MS, ENEMY_KNOCKBACK_MS } from '../config/constants';
 
 let nextEnemyId = 1;
 
@@ -14,7 +14,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   speed: number;
   isElite: boolean;
   private damageTween: Phaser.Tweens.Tween | null = null;
-  private eliteGlow: Phaser.GameObjects.Graphics | null = null;
+  private knockedBack = false;
 
   constructor(
     scene: Phaser.Scene, x: number, y: number,
@@ -42,18 +42,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (elite) {
       this.setScale(1.5);
       this.setTint(0xffdd44);
-      // Pulsing glow effect
       scene.tweens.add({
         targets: this,
         alpha: { from: 1, to: 0.7 },
-        yoyo: true,
-        repeat: -1,
-        duration: 400,
+        yoyo: true, repeat: -1, duration: 400,
       });
     }
   }
 
   chasePlayer(playerX: number, playerY: number): void {
+    // Don't chase during knockback
+    if (this.knockedBack) return;
+
     const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     this.setVelocity(
       Math.cos(angle) * this.speed,
@@ -65,6 +65,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): boolean {
     this.hp -= amount;
 
+    // Flash
     this.setTint(this.isElite ? 0xffff88 : 0xffffff);
     if (this.damageTween) this.damageTween.stop();
     this.damageTween = this.scene.tweens.add({
@@ -78,6 +79,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       },
     });
 
+    // Knockback with state lock
     const body = this.body as Phaser.Physics.Arcade.Body;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
@@ -86,6 +88,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       (-vx / mag) * ENEMY_KNOCKBACK_SPEED,
       (-vy / mag) * ENEMY_KNOCKBACK_SPEED
     );
+    this.knockedBack = true;
+    this.scene.time.delayedCall(ENEMY_KNOCKBACK_MS, () => {
+      if (this.active) this.knockedBack = false;
+    });
 
     if (this.hp <= 0) {
       this.die();
@@ -95,7 +101,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   private die(): void {
-    if (this.eliteGlow) this.eliteGlow.destroy();
     this.scene.events.emit('enemy-killed', this);
     this.destroy();
   }

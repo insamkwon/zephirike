@@ -34,6 +34,8 @@ export class WeaponManager {
   private scene: Phaser.Scene;
   private player: Player;
   private enemyPool: EnemyPool;
+  /** Instance-level weapon registry (includes evolved weapons without polluting global) */
+  private localWeaponDefs = new Map<string, WeaponDef>();
   weapons: OwnedWeapon[];
   projectiles: Phaser.Physics.Arcade.Group;
 
@@ -60,7 +62,7 @@ export class WeaponManager {
       return;
     }
 
-    const def = WEAPONS[weaponId];
+    const def = WEAPONS[weaponId] ?? this.localWeaponDefs.get(weaponId);
     if (!def) return;
 
     const owned: OwnedWeapon = { id: weaponId, level: 0, def, lastFired: 0 };
@@ -127,7 +129,7 @@ export class WeaponManager {
         this.player.x, this.player.y, `proj_${weapon.id}`
       ) as Projectile | null;
       if (proj) {
-        proj.fire(this.player.x, this.player.y, angle + spread, stats.speed, stats.damage, stats.pierce);
+        proj.fire(this.player.x, this.player.y, angle + spread, stats.speed, this.scaledDamage(stats.damage), stats.pierce);
       }
     }
   }
@@ -146,10 +148,11 @@ export class WeaponManager {
       // VFX: slash rectangle
       this.showSlash(hitX, hitY, stats.area, weapon.def.color, stats.duration);
 
-      // Damage enemies in range (single getNearby call)
+      // Damage enemies in range — apply damage multiplier
+      const dmg = this.scaledDamage(stats.damage);
       const nearby = this.enemyPool.getNearby(hitX, hitY, stats.area);
       for (const enemy of nearby) {
-        enemy.takeDamage(stats.damage);
+        enemy.takeDamage(dmg);
       }
     }
   }
@@ -193,9 +196,10 @@ export class WeaponManager {
       repeat: Math.floor(duration / AREA_TICK_MS) - 1,
       callback: () => {
         elapsed += AREA_TICK_MS;
+        const dmg = this.scaledDamage(damage);
         const nearby = this.enemyPool.getNearby(x, y, radius);
         for (const enemy of nearby) {
-          enemy.takeDamage(damage);
+          enemy.takeDamage(dmg);
         }
         pool.setAlpha(0.15 + 0.15 * Math.sin(elapsed * 0.01));
       },
@@ -229,10 +233,11 @@ export class WeaponManager {
       const oy = this.player.y + Math.sin(angle) * stats.area;
       orb.setPosition(ox, oy);
 
-      // Damage nearby enemies (single getNearby call per orb)
+      // Damage nearby enemies — apply damage multiplier
+      const dmg = this.scaledDamage(stats.damage);
       const hit = this.enemyPool.getNearby(ox, oy, ORB_HIT_RADIUS);
       for (const enemy of hit) {
-        enemy.takeDamage(stats.damage);
+        enemy.takeDamage(dmg);
       }
     }
   }
@@ -286,8 +291,8 @@ export class WeaponManager {
       }
     }
 
-    // Register the evolved weapon def so addWeapon can find it
-    WEAPONS[resultDef.id] = resultDef;
+    // Register in instance-level registry (not polluting global WEAPONS)
+    this.localWeaponDefs.set(resultDef.id, resultDef);
     this.addWeapon(resultDef.id);
   }
 
@@ -316,10 +321,14 @@ export class WeaponManager {
   /** Map of owned weapon defs for LevelUpUI */
   getOwnedDefs(): Map<string, WeaponDef> {
     const map = new Map<string, WeaponDef>();
-    for (const w of this.weapons) {
-      map.set(w.id, w.def);
-    }
+    for (const w of this.weapons) map.set(w.id, w.def);
+    for (const [id, def] of this.localWeaponDefs) map.set(id, def);
     return map;
+  }
+
+  /** Apply all damage bonuses: meta upgrade + might passive */
+  private scaledDamage(base: number): number {
+    return Math.floor(base * this.player.metaDamageMul * (1 + this.player.mightBonus));
   }
 
   destroy(): void {

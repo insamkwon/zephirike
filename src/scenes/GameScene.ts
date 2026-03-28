@@ -45,7 +45,6 @@ export class GameScene extends Phaser.Scene {
   private lastKillMilestone = 0;
   private bossWarningShown = new Set<number>();
   private lastWaveTime = 0;
-  private damageMul = 1;
   private xpMul = 1;
 
   // Passive tracking
@@ -73,7 +72,6 @@ export class GameScene extends Phaser.Scene {
     this.vfx = new VFX(this);
 
     const bonuses = getMetaBonuses();
-    this.damageMul = bonuses.damageMul;
     this.xpMul = bonuses.xpMul;
 
     this.setupWorld(bonuses);
@@ -82,12 +80,8 @@ export class GameScene extends Phaser.Scene {
     this.setupEvents();
     this.setupInput();
 
-    // Start BGM
-    if ((soundEngine as unknown as { ctx: AudioContext | null }).ctx) {
-      const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
-      const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
-      bgm.start(ctx, master);
-    }
+    // Start BGM via public API
+    this.startBGM();
   }
 
   update(time: number, delta: number): void {
@@ -182,9 +176,8 @@ export class GameScene extends Phaser.Scene {
         const enemy = eObj as Enemy;
         if (!proj.active || !enemy.active) return;
         proj.onHitEnemy(enemy.uid);
-        const dmg = Math.floor(proj.damage * this.getTotalDamageMul());
-        const killed = enemy.takeDamage(dmg);
-        this.vfx.damageNumber(enemy.x, enemy.y - 10, dmg);
+        const killed = enemy.takeDamage(proj.damage);
+        this.vfx.damageNumber(enemy.x, enemy.y - 10, proj.damage);
         if (killed) {
           // Hitstop for bosses/elites
           if (enemy.enemyDef.isBoss || enemy.isElite) {
@@ -283,11 +276,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-M', () => {
       const muted = soundEngine.toggleMute();
       if (muted) bgm.stop();
-      else {
-        const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
-        const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
-        if (ctx && master) bgm.start(ctx, master);
-      }
+      else this.startBGM();
     });
   }
 
@@ -492,9 +481,7 @@ export class GameScene extends Phaser.Scene {
       ).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseText');
     } else {
       this.physics.resume();
-      const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
-      const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
-      if (ctx && master) bgm.start(ctx, master);
+      this.startBGM();
       const pt = this.children.getByName('pauseText');
       if (pt) pt.destroy();
     }
@@ -526,8 +513,10 @@ export class GameScene extends Phaser.Scene {
 
   // ── Helpers ──
 
-  private getTotalDamageMul(): number {
-    return this.damageMul + this.player.mightBonus;
+  private startBGM(): void {
+    const ctx = soundEngine.getContext();
+    const dest = soundEngine.getDestination();
+    if (ctx && dest && !soundEngine.isMuted) bgm.start(ctx, dest);
   }
 
   private flashDamageOverlay(): void {

@@ -36,7 +36,9 @@ export class Drop extends Phaser.Physics.Arcade.Sprite {
       Phaser.Math.Between(-40, 40),
       Phaser.Math.Between(-40, 40)
     );
-    (this.body as Phaser.Physics.Arcade.Body).setDrag(100);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setDrag(100);
+    body.setCollideWorldBounds(true);
 
     // Visual styling
     if (type === 'xp') {
