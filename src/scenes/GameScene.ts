@@ -20,6 +20,8 @@ import { TEXT_STYLES } from '../config/styles';
 import { EVOLUTIONS } from '../config/evolutionConfig';
 import { unlockCharacter } from '../config/characterConfig';
 import { MapObjects } from '../systems/MapObjects';
+import { BoneProjectilePool } from '../entities/BoneProjectile';
+import { ENEMIES } from '../config/enemyConfig';
 import {
   WORLD_WIDTH, WORLD_HEIGHT,
   GAME_DURATION_SECONDS,
@@ -56,9 +58,10 @@ export class GameScene extends Phaser.Scene {
   private recentKills = 0;
   private recentKillTimer = 0;
   private mapObjects!: MapObjects;
-  private dpsHistory: number[] = [];
-  private dpsSampleTimer = 0;
-  private dpsSampleKills = 0;
+  private bonePool!: BoneProjectilePool;
+  private killsPerSample: number[] = [];
+  private sampleTimer = 0;
+  private sampleKills = 0;
   private totalDamageTaken = 0;
 
   // Passive tracking
@@ -160,13 +163,20 @@ export class GameScene extends Phaser.Scene {
     this.recentKillTimer += delta;
     if (this.recentKillTimer > 500) this.recentKills = 0;
 
-    // DPS tracking (sample every 30s)
-    this.dpsSampleTimer += delta;
-    if (this.dpsSampleTimer >= 30000) {
-      this.dpsSampleTimer -= 30000;
-      const killsDelta = this.player.kills - this.dpsSampleKills;
-      this.dpsSampleKills = this.player.kills;
-      this.dpsHistory.push(killsDelta);
+    // Bone projectiles update
+    this.bonePool.update(delta, this.player.x, this.player.y, (dmg) => {
+      this.player.takeDamage(dmg);
+      this.flashDamageOverlay();
+      soundEngine.playerHit();
+    });
+
+    // Kill rate tracking (sample every 30s)
+    this.sampleTimer += delta;
+    if (this.sampleTimer >= 30000) {
+      this.sampleTimer -= 30000;
+      const killsDelta = this.player.kills - this.sampleKills;
+      this.sampleKills = this.player.kills;
+      this.killsPerSample.push(killsDelta);
     }
   }
 
@@ -194,13 +204,14 @@ export class GameScene extends Phaser.Scene {
 
   private createSystems(): void {
     this.enemyPool = new EnemyPool(this);
-    this.weaponManager = new WeaponManager(this, this.player, this.enemyPool);
+    this.weaponManager = new WeaponManager(this, this.player, this.enemyPool, this.charBonuses.cooldownMul);
     this.weaponManager.addWeapon(this.startingWeapon);
     this.waveManager = new WaveManager(this, this.enemyPool);
     this.dropManager = new DropManager(this, this.player);
     this.hud = new HUD(this, this.player);
     this.minimap = new Minimap(this, this.player, this.enemyPool);
     this.mapObjects = new MapObjects(this);
+    this.bonePool = new BoneProjectilePool(this);
   }
 
   private setupCollisions(): void {
@@ -258,28 +269,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupEvents(): void {
-    // Skeleton ranged attack
+    // Skeleton ranged attack → pooled bone projectile
     this.events.on('enemy-ranged-attack', (enemy: Enemy, px: number, py: number) => {
       if (!enemy.active) return;
-      const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, px, py);
-      const bone = this.add.rectangle(enemy.x, enemy.y, 6, 6, 0xcccccc, 1).setDepth(8);
-      const vx = Math.cos(angle) * 200;
-      const vy = Math.sin(angle) * 200;
-      const moveTimer = this.time.addEvent({
-        delay: 16, repeat: 120,
-        callback: () => {
-          bone.x += vx * 0.016;
-          bone.y += vy * 0.016;
-          bone.rotation += 0.2;
-          const dist = Phaser.Math.Distance.Between(bone.x, bone.y, this.player.x, this.player.y);
-          if (dist < 20) {
-            this.player.takeDamage(enemy.damage);
-            moveTimer.destroy();
-            bone.destroy();
-          }
-        },
-      });
-      this.time.delayedCall(2000, () => { if (bone.active) bone.destroy(); });
+      this.bonePool.fire(enemy.x, enemy.y, px, py, enemy.damage);
+    });
+
+    // Boss AoE stomp
+    this.events.on('boss-aoe', (x: number, y: number, radius: number, damage: number) => {
+      const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
+      if (dist < radius) {
+        this.player.takeDamage(damage);
+        this.flashDamageOverlay();
+        this.vfx.shake(0.008, 200);
+      }
+    });
+
+    // Boss summon minions
+    this.events.on('boss-summon', (x: number, y: number, count: number) => {
+      const batDef = ENEMIES['bat'];
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        const sx = x + Math.cos(angle) * 60;
+        const sy = y + Math.sin(angle) * 60;
+        const minion = new Enemy(this, sx, sy, batDef, 2, 1.5);
+        this.enemyPool.add(minion);
+      }
     });
 
     this.events.on('enemy-killed', (enemy: Enemy) => {
@@ -412,22 +427,24 @@ export class GameScene extends Phaser.Scene {
     Phaser.Utils.Array.Shuffle(allOptions);
     const finalOptions = allOptions.slice(0, LEVEL_UP_CHOICES);
 
+    const onSelectUpgrade = (weaponId: string) => {
+      if (PASSIVES[weaponId]) {
+        const currentLv = this.ownedPassives.get(weaponId) ?? 0;
+        this.ownedPassives.set(weaponId, currentLv + 1);
+        this.player.applyPassive(weaponId, currentLv + 1);
+      } else {
+        this.weaponManager.addWeapon(weaponId);
+      }
+      this.levelUpUI = null;
+      this.paused = false;
+      this.physics.resume();
+    };
+
     this.levelUpUI = new LevelUpUI(
       this, this.player.level, finalOptions,
       this.weaponManager.getOwnedDefs(),
-      (weaponId) => {
-        // Check if it's a passive
-        if (PASSIVES[weaponId]) {
-          const currentLv = this.ownedPassives.get(weaponId) ?? 0;
-          this.ownedPassives.set(weaponId, currentLv + 1);
-          this.player.applyPassive(weaponId, currentLv + 1);
-        } else {
-          this.weaponManager.addWeapon(weaponId);
-        }
-        this.levelUpUI = null;
-        this.paused = false;
-        this.physics.resume();
-      }
+      onSelectUpgrade,
+      () => this.showLevelUp() // reroll: re-show level up with new options
     );
   }
 
@@ -631,8 +648,8 @@ export class GameScene extends Phaser.Scene {
       level: this.player.level,
       gold: this.goldEarned,
       weapons: this.weaponManager.weapons.map(w => `${w.def.icon} ${w.def.name} Lv.${w.level + 1}`),
-      dpsHistory: this.dpsHistory,
-      peakDps: this.dpsHistory.length > 0 ? Math.max(...this.dpsHistory) : 0,
+      dpsHistory: this.killsPerSample,
+      peakDps: this.killsPerSample.length > 0 ? Math.max(...this.killsPerSample) : 0,
       damageTaken: this.totalDamageTaken,
     });
   }

@@ -39,7 +39,7 @@ export class GameOverScene extends Phaser.Scene {
       ['Gold Earned', `+${data.gold}`],
       ['Total Gold', `${getGold()}`],
     ];
-    if (data.peakDps) stats.push(['Peak DPS', `${data.peakDps}`]);
+    if (data.peakDps) stats.push(['Peak Kill Rate', `${data.peakDps}/30s`]);
     if (data.damageTaken) stats.push(['Damage Taken', `${data.damageTaken}`]);
 
     let sy = 115;

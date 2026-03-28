@@ -52,7 +52,26 @@ export const AREA_TICK_MS = 500;
 export const AREA_OFFSET_RANGE = 100;
 export const AREA_FADE_MS = 300;
 
+// -- Map Objects --
+export const MAP_PILLAR_COUNT = 40;
+export const MAP_TORCH_COUNT = 60;
+export const MAP_GRAVE_COUNT = 30;
+export const MAP_SPAWN_EXCLUSION = 300;
+export const TORCH_HP = 3;
+export const BONE_PROJECTILE_SPEED = 200;
+export const BONE_LIFETIME_MS = 2000;
+export const BONE_HIT_RADIUS = 20;
+
+// -- Boss --
+export const BOSS_CHARGE_SPEED_MUL = 3;
+export const BOSS_CHARGE_DURATION = 600;
+export const BOSS_AOE_RADIUS = 150;
+export const BOSS_AOE_DAMAGE = 25;
+export const BOSS_SUMMON_COUNT = 5;
+export const BOSS_PHASE_INTERVAL = 4000;
+
 // -- UI --
 export const DAMAGE_OVERLAY_ALPHA = 0.3;
 export const DAMAGE_OVERLAY_FADE_MS = 200;
 export const LEVEL_UP_CHOICES = 3;
+export const REROLL_COST = 25;

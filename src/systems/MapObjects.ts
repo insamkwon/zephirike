@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import { WORLD_WIDTH, WORLD_HEIGHT, WORLD_BOUND_MARGIN } from '../config/constants';
+import {
+  WORLD_WIDTH, WORLD_HEIGHT, WORLD_BOUND_MARGIN,
+  MAP_PILLAR_COUNT, MAP_TORCH_COUNT, MAP_GRAVE_COUNT, MAP_SPAWN_EXCLUSION, TORCH_HP,
+} from '../config/constants';
 
 /**
  * Spawns destructible objects and obstacles on the map.
@@ -22,11 +25,10 @@ export class MapObjects {
     const margin = WORLD_BOUND_MARGIN + 100;
 
     // Stone pillars (static obstacles — enemies and player collide)
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < MAP_PILLAR_COUNT; i++) {
       const x = rng.between(margin, WORLD_WIDTH - margin);
       const y = rng.between(margin, WORLD_HEIGHT - margin);
-      // Don't place near center (player spawn)
-      if (Math.abs(x - WORLD_WIDTH / 2) < 300 && Math.abs(y - WORLD_HEIGHT / 2) < 300) continue;
+      if (Math.abs(x - WORLD_WIDTH / 2) < MAP_SPAWN_EXCLUSION && Math.abs(y - WORLD_HEIGHT / 2) < MAP_SPAWN_EXCLUSION) continue;
 
       const pillar = this.scene.add.rectangle(x, y, 24, 24, 0x444455, 1).setDepth(1);
       this.scene.physics.add.existing(pillar, true);
@@ -34,14 +36,14 @@ export class MapObjects {
     }
 
     // Destructible torches (drop XP when broken)
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < MAP_TORCH_COUNT; i++) {
       const x = rng.between(margin, WORLD_WIDTH - margin);
       const y = rng.between(margin, WORLD_HEIGHT - margin);
-      if (Math.abs(x - WORLD_WIDTH / 2) < 200 && Math.abs(y - WORLD_HEIGHT / 2) < 200) continue;
+      if (Math.abs(x - WORLD_WIDTH / 2) < MAP_SPAWN_EXCLUSION * 0.67 && Math.abs(y - WORLD_HEIGHT / 2) < MAP_SPAWN_EXCLUSION * 0.67) continue;
 
       const torch = this.scene.add.rectangle(x, y, 12, 16, 0xcc6622, 1).setDepth(1);
       this.scene.physics.add.existing(torch);
-      torch.setData('hp', 3);
+      torch.setData('hp', TORCH_HP);
       torch.setData('type', 'torch');
       this.destructibles.add(torch);
 
@@ -58,7 +60,7 @@ export class MapObjects {
     }
 
     // Decorative graves (visual only, no collision)
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < MAP_GRAVE_COUNT; i++) {
       const x = rng.between(margin, WORLD_WIDTH - margin);
       const y = rng.between(margin, WORLD_HEIGHT - margin);
       this.scene.add.rectangle(x, y, 10, 14, 0x555566, 0.6).setDepth(0);

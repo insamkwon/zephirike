@@ -34,15 +34,16 @@ export class WeaponManager {
   private scene: Phaser.Scene;
   private player: Player;
   private enemyPool: EnemyPool;
-  /** Instance-level weapon registry (includes evolved weapons without polluting global) */
   private localWeaponDefs = new Map<string, WeaponDef>();
+  private charCooldownMul: number;
   weapons: OwnedWeapon[];
   projectiles: Phaser.Physics.Arcade.Group;
 
-  constructor(scene: Phaser.Scene, player: Player, enemyPool: EnemyPool) {
+  constructor(scene: Phaser.Scene, player: Player, enemyPool: EnemyPool, charCooldownMul = 1) {
     this.scene = scene;
     this.player = player;
     this.enemyPool = enemyPool;
+    this.charCooldownMul = charCooldownMul;
     this.weapons = [];
 
     this.projectiles = scene.physics.add.group({
@@ -94,7 +95,7 @@ export class WeaponManager {
       }
 
       // Cooldown-based weapons (apply haste passive)
-      const effectiveCooldown = stats.cooldown * (1 - this.player.cooldownReduction);
+      const effectiveCooldown = stats.cooldown * this.charCooldownMul * (1 - this.player.cooldownReduction);
       if (time - weapon.lastFired < effectiveCooldown) continue;
       weapon.lastFired = time;
 

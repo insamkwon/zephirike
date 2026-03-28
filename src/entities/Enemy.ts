@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { EnemyDef } from '../config/enemyConfig';
-import { ENEMY_KNOCKBACK_SPEED, ENEMY_DAMAGE_FLASH_MS, ENEMY_KNOCKBACK_MS } from '../config/constants';
+import {
+  ENEMY_KNOCKBACK_SPEED, ENEMY_DAMAGE_FLASH_MS, ENEMY_KNOCKBACK_MS,
+  BOSS_CHARGE_SPEED_MUL, BOSS_CHARGE_DURATION, BOSS_AOE_RADIUS, BOSS_AOE_DAMAGE,
+  BOSS_SUMMON_COUNT, BOSS_PHASE_INTERVAL,
+} from '../config/constants';
 
 let nextEnemyId = 1;
 
@@ -99,6 +103,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         break;
       case 'charge':
         this.aiCharge(playerX, playerY);
+        break;
+      case 'boss':
+        this.aiBoss(playerX, playerY);
         break;
     }
 
@@ -225,6 +232,67 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           }
         });
       }
+    }
+  }
+
+  /** Boss: cycles through 3 phases — chase, charge, AoE stomp, summon minions */
+  private bossPhase = 0;
+  private bossPhaseTimer = 0;
+  private bossCharging = false;
+
+  private aiBoss(px: number, py: number): void {
+    this.bossPhaseTimer += 16; // approximate delta
+
+    if (this.bossCharging) return; // mid-charge
+
+    // Cycle phases every BOSS_PHASE_INTERVAL
+    if (this.bossPhaseTimer > BOSS_PHASE_INTERVAL) {
+      this.bossPhaseTimer = 0;
+      this.bossPhase = (this.bossPhase + 1) % 3;
+    }
+
+    switch (this.bossPhase) {
+      case 0: // Chase slowly
+        this.aiChase(px, py);
+        break;
+
+      case 1: // Charge attack
+        this.bossCharging = true;
+        this.setTint(0xff0000);
+        // Pause, then charge
+        this.setVelocity(0, 0);
+        this.scene.time.delayedCall(500, () => {
+          if (!this.active) return;
+          const angle = Phaser.Math.Angle.Between(this.x, this.y, px, py);
+          this.setVelocity(
+            Math.cos(angle) * this.speed * BOSS_CHARGE_SPEED_MUL,
+            Math.sin(angle) * this.speed * BOSS_CHARGE_SPEED_MUL
+          );
+          this.scene.time.delayedCall(BOSS_CHARGE_DURATION, () => {
+            if (this.active) {
+              this.bossCharging = false;
+              this.clearTint();
+            }
+          });
+        });
+        break;
+
+      case 2: // AoE stomp + summon
+        this.setVelocity(0, 0);
+        // Visual: expanding ring
+        const ring = this.scene.add.circle(this.x, this.y, 10, 0xff0000, 0.3).setDepth(2);
+        this.scene.tweens.add({
+          targets: ring,
+          radius: BOSS_AOE_RADIUS,
+          alpha: 0,
+          duration: 600,
+          onComplete: () => ring.destroy(),
+        });
+        // Emit AoE damage event
+        this.scene.events.emit('boss-aoe', this.x, this.y, BOSS_AOE_RADIUS, BOSS_AOE_DAMAGE);
+        // Summon minions
+        this.scene.events.emit('boss-summon', this.x, this.y, BOSS_SUMMON_COUNT);
+        break;
     }
   }
 

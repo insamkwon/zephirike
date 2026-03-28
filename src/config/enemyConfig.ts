@@ -1,4 +1,4 @@
-export type EnemyAI = 'chase' | 'zigzag' | 'ranged' | 'teleport' | 'pack' | 'charge';
+export type EnemyAI = 'chase' | 'zigzag' | 'ranged' | 'teleport' | 'pack' | 'charge' | 'boss';
 
 export interface EnemyDef {
   key: string;
@@ -78,7 +78,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 50,
     color: 0x220022,
     size: 20,
-    ai: 'chase',
+    ai: 'boss',
     isBoss: true,
   },
 };
