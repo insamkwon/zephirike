@@ -80,4 +80,9 @@ export class Drop extends Phaser.Physics.Arcade.Sprite {
 
     return null;
   }
+
+  /** Force this drop to be attracted (used by level-up vacuum) */
+  forceAttract(): void {
+    this.attracted = true;
+  }
 }

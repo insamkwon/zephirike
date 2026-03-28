@@ -43,11 +43,11 @@ export class SoundEngine {
   // ── Sound Effects ──
 
   hit(): void {
-    this.playTone(200, 0.05, 'square', 0.15, -20);
+    this.playTone(200 + this.rp(), 0.05, 'square', 0.15, this.rp() * 5);
   }
 
   kill(): void {
-    this.playSweep(400, 100, 0.12, 'sawtooth', 0.2);
+    this.playSweep(400 + this.rp() * 2, 100, 0.12, 'sawtooth', 0.2);
   }
 
   playerHit(): void {
@@ -56,8 +56,8 @@ export class SoundEngine {
   }
 
   xpPickup(): void {
-    this.playTone(800, 0.04, 'sine', 0.1);
-    this.playTone(1000, 0.04, 'sine', 0.08, 0, 0.05);
+    this.playTone(800 + this.rp() * 3, 0.04, 'sine', 0.1);
+    this.playTone(1000 + this.rp() * 3, 0.04, 'sine', 0.08, 0, 0.05);
   }
 
   healthPickup(): void {
@@ -120,6 +120,11 @@ export class SoundEngine {
   goldPickup(): void {
     this.playTone(1200, 0.05, 'sine', 0.12);
     this.playTone(1500, 0.05, 'sine', 0.1, 0, 0.05);
+  }
+
+  /** Random pitch variation ±20% */
+  private rp(): number {
+    return (Math.random() - 0.5) * 40;
   }
 
   // ── Primitives ──

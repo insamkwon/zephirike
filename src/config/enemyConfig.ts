@@ -1,3 +1,5 @@
+export type EnemyAI = 'chase' | 'zigzag' | 'ranged' | 'teleport' | 'pack' | 'charge';
+
 export interface EnemyDef {
   key: string;
   name: string;
@@ -5,8 +7,9 @@ export interface EnemyDef {
   speed: number;
   damage: number;
   xp: number;
-  color: number;       // procedural sprite tint
-  size: number;        // radius
+  color: number;
+  size: number;
+  ai: EnemyAI;
   isBoss?: boolean;
 }
 
@@ -20,6 +23,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 1,
     color: 0x8844aa,
     size: 8,
+    ai: 'zigzag',
   },
   skeleton: {
     key: 'skeleton',
@@ -30,6 +34,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 3,
     color: 0xcccccc,
     size: 10,
+    ai: 'ranged',
   },
   zombie: {
     key: 'zombie',
@@ -40,6 +45,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 5,
     color: 0x44aa44,
     size: 12,
+    ai: 'pack',
   },
   ghost: {
     key: 'ghost',
@@ -50,6 +56,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 4,
     color: 0xaaaaff,
     size: 10,
+    ai: 'teleport',
   },
   demon: {
     key: 'demon',
@@ -60,6 +67,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 8,
     color: 0xff4444,
     size: 14,
+    ai: 'charge',
   },
   reaper: {
     key: 'reaper',
@@ -70,6 +78,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xp: 50,
     color: 0x220022,
     size: 20,
+    ai: 'chase',
     isBoss: true,
   },
 };

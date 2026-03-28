@@ -44,6 +44,15 @@ export class DropManager {
     }
   }
 
+  /** Vacuum ALL drops on screen toward player (called on level-up) */
+  vacuumAll(): void {
+    const children = this.drops.getChildren() as Drop[];
+    for (const drop of children) {
+      if (!drop.active) continue;
+      drop.forceAttract();
+    }
+  }
+
   destroy(): void {
     this.drops.destroy(true);
   }

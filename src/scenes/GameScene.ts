@@ -48,6 +48,8 @@ export class GameScene extends Phaser.Scene {
   private lastWaveTime = 0;
   private xpMul = 1;
   private inHitstop = false;
+  private recentKills = 0;
+  private recentKillTimer = 0;
 
   // Passive tracking
   private ownedPassives = new Map<string, number>();
@@ -104,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     this.waveManager.update(elapsed);
     this.weaponManager.update(time);
     this.dropManager.update();
-    this.enemyPool.updateEnemies(this.player.x, this.player.y);
+    this.enemyPool.updateEnemies(this.player.x, this.player.y, delta);
     this.minimap.update();
 
     // Update BGM intensity
@@ -121,6 +123,12 @@ export class GameScene extends Phaser.Scene {
 
     this.hud.update(elapsed, weaponStr, this.goldEarned, passiveStr, evoReady);
     this.checkKillStreak();
+
+    // Multi-kill shake tracker: reset after 500ms of no kills
+    this.recentKillTimer += delta;
+    if (this.recentKillTimer > 500) {
+      this.recentKills = 0;
+    }
   }
 
   // ── Setup ──
@@ -194,8 +202,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupEvents(): void {
+    // Skeleton ranged attack
+    this.events.on('enemy-ranged-attack', (enemy: Enemy, px: number, py: number) => {
+      if (!enemy.active) return;
+      const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, px, py);
+      const bone = this.add.rectangle(enemy.x, enemy.y, 6, 6, 0xcccccc, 1).setDepth(8);
+      const vx = Math.cos(angle) * 200;
+      const vy = Math.sin(angle) * 200;
+      const moveTimer = this.time.addEvent({
+        delay: 16, repeat: 120,
+        callback: () => {
+          bone.x += vx * 0.016;
+          bone.y += vy * 0.016;
+          bone.rotation += 0.2;
+          const dist = Phaser.Math.Distance.Between(bone.x, bone.y, this.player.x, this.player.y);
+          if (dist < 20) {
+            this.player.takeDamage(enemy.damage);
+            moveTimer.destroy();
+            bone.destroy();
+          }
+        },
+      });
+      this.time.delayedCall(2000, () => { if (bone.active) bone.destroy(); });
+    });
+
     this.events.on('enemy-killed', (enemy: Enemy) => {
       this.player.kills++;
+
+      // Multi-kill shake
+      this.recentKills++;
+      this.recentKillTimer = 0;
+      if (this.recentKills >= 5) {
+        this.vfx.shake(0.004 * Math.min(this.recentKills / 10, 1), 100);
+      }
 
       this.vfx.deathBurst(enemy.x, enemy.y, enemy.enemyDef.color, enemy.isElite ? 16 : 8);
       soundEngine.kill();
@@ -289,6 +328,9 @@ export class GameScene extends Phaser.Scene {
     this.physics.pause();
     soundEngine.levelUp();
     this.vfx.screenFlash(0xffdd44, 0.3, 200);
+
+    // XP vacuum — pull all drops toward player
+    this.dropManager.vacuumAll();
 
     // Check evolution
     const evo = this.weaponManager.getAvailableEvolution();

@@ -233,11 +233,15 @@ export class WeaponManager {
       const oy = this.player.y + Math.sin(angle) * stats.area;
       orb.setPosition(ox, oy);
 
-      // Damage nearby enemies — apply damage multiplier
+      // Damage nearby enemies — with per-enemy hit cooldown
       const dmg = this.scaledDamage(stats.damage);
+      const now = this.scene.time.now;
+      const orbSourceId = `orb_${weapon.id}`;
       const hit = this.enemyPool.getNearby(ox, oy, ORB_HIT_RADIUS);
       for (const enemy of hit) {
-        enemy.takeDamage(dmg);
+        if (enemy.canBeHitBy(orbSourceId, now)) {
+          enemy.takeDamage(dmg);
+        }
       }
     }
   }

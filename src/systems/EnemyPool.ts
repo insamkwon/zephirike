@@ -63,8 +63,8 @@ export class EnemyPool {
     return withDist.slice(0, count).map(w => w.enemy);
   }
 
-  /** Single-pass update: chase player + despawn far enemies */
-  updateEnemies(playerX: number, playerY: number): void {
+  /** Single-pass update: AI movement + despawn far enemies */
+  updateEnemies(playerX: number, playerY: number, delta: number): void {
     const despawnR2 = ENEMY_DESPAWN_RANGE * ENEMY_DESPAWN_RANGE;
     for (const enemy of this.getLiving()) {
       const dx = enemy.x - playerX;
@@ -72,7 +72,7 @@ export class EnemyPool {
       if (dx * dx + dy * dy > despawnR2) {
         enemy.destroy();
       } else {
-        enemy.chasePlayer(playerX, playerY);
+        enemy.moveToward(playerX, playerY, delta);
       }
     }
   }
