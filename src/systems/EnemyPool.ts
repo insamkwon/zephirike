@@ -4,13 +4,11 @@ import { ENEMY_DESPAWN_RANGE } from '../config/constants';
 
 /**
  * Manages the enemy group with unique IDs and efficient spatial queries.
- * Caches the living-enemy list once per frame to avoid repeated filter calls.
+ * Caches the living-enemy list once per frame. Returns readonly to prevent mutation.
  */
 export class EnemyPool {
   readonly group: Phaser.Physics.Arcade.Group;
   private scene: Phaser.Scene;
-
-  /** Cached living enemies — refreshed once per update() call */
   private livingCache: Enemy[] = [];
   private cacheFrame = -1;
 
@@ -26,8 +24,8 @@ export class EnemyPool {
     this.group.add(enemy);
   }
 
-  /** Returns cached array of active enemies (refreshed once per frame) */
-  getLiving(): Enemy[] {
+  /** Returns readonly cached array of active enemies (refreshed once per frame) */
+  getLiving(): readonly Enemy[] {
     const frame = this.scene.game.loop.frame;
     if (frame !== this.cacheFrame) {
       this.cacheFrame = frame;
@@ -38,7 +36,7 @@ export class EnemyPool {
     return this.livingCache;
   }
 
-  /** Returns enemies within range of (x, y). Uses squared distance to avoid sqrt. */
+  /** Returns enemies within range of (x, y). Uses squared distance. */
   getNearby(x: number, y: number, range: number): Enemy[] {
     const r2 = range * range;
     const result: Enemy[] = [];
@@ -52,27 +50,17 @@ export class EnemyPool {
     return result;
   }
 
-  /** Find the closest N enemies to (x, y). O(n) per call using partial sort. */
+  /** Find the closest N enemies to (x, y). */
   getClosest(x: number, y: number, count: number): Enemy[] {
     const living = this.getLiving();
     if (living.length === 0) return [];
-    if (living.length <= count) {
-      return [...living].sort((a, b) => this.distSq(x, y, a) - this.distSq(x, y, b));
-    }
 
-    // Partial sort: only keep top `count` closest
     const withDist = living.map(e => ({
       enemy: e,
-      d: this.distSq(x, y, e),
+      d: (e.x - x) ** 2 + (e.y - y) ** 2,
     }));
     withDist.sort((a, b) => a.d - b.d);
     return withDist.slice(0, count).map(w => w.enemy);
-  }
-
-  private distSq(x: number, y: number, e: Enemy): number {
-    const dx = e.x - x;
-    const dy = e.y - y;
-    return dx * dx + dy * dy;
   }
 
   /** Single-pass update: chase player + despawn far enemies */

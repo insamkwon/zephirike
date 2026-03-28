@@ -1,178 +1,185 @@
 import Phaser from 'phaser';
+import { TEXT_STYLES } from '../config/styles';
+
+const PARTICLE_POOL_SIZE = 64;
+const TEXT_POOL_SIZE = 16;
 
 /**
- * Visual effects manager — screen shake, particle bursts, damage numbers, flashes.
+ * Visual effects manager with object pooling for particles and damage numbers.
  */
 export class VFX {
   private scene: Phaser.Scene;
+  private particlePool: Phaser.GameObjects.Rectangle[] = [];
+  private textPool: Phaser.GameObjects.Text[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.initPools();
   }
 
-  /** Camera shake */
+  private initPools(): void {
+    // Pre-allocate particle rectangles
+    for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+      const p = this.scene.add.rectangle(-100, -100, 4, 4, 0xffffff, 0);
+      p.setDepth(15).setActive(false).setVisible(false);
+      this.particlePool.push(p);
+    }
+    // Pre-allocate damage number texts
+    for (let i = 0; i < TEXT_POOL_SIZE; i++) {
+      const t = this.scene.add.text(-100, -100, '', TEXT_STYLES.damage);
+      t.setOrigin(0.5).setDepth(20).setActive(false).setVisible(false);
+      this.textPool.push(t);
+    }
+  }
+
+  private getParticle(): Phaser.GameObjects.Rectangle | null {
+    for (const p of this.particlePool) {
+      if (!p.active) return p;
+    }
+    return null; // pool exhausted — skip this particle
+  }
+
+  private getText(): Phaser.GameObjects.Text | null {
+    for (const t of this.textPool) {
+      if (!t.active) return t;
+    }
+    return null;
+  }
+
+  private releaseParticle(p: Phaser.GameObjects.Rectangle): void {
+    p.setActive(false).setVisible(false).setPosition(-100, -100).setAlpha(1).setScale(1);
+  }
+
+  private releaseText(t: Phaser.GameObjects.Text): void {
+    t.setActive(false).setVisible(false).setPosition(-100, -100).setAlpha(1).setScale(1);
+  }
+
+  // ── Effects ──
+
   shake(intensity = 0.005, duration = 100): void {
     this.scene.cameras.main.shake(duration, intensity);
   }
 
-  /** Particle burst at position (enemy death explosion) */
   deathBurst(x: number, y: number, color: number, count = 8): void {
     for (let i = 0; i < count; i++) {
+      const p = this.getParticle();
+      if (!p) break;
+
       const angle = (i / count) * Math.PI * 2;
       const speed = Phaser.Math.Between(60, 150);
       const size = Phaser.Math.Between(2, 5);
 
-      const particle = this.scene.add.rectangle(x, y, size, size, color, 0.9);
-      particle.setDepth(15);
+      p.setPosition(x, y).setSize(size, size).setFillStyle(color, 0.9);
+      p.setActive(true).setVisible(true).setAlpha(0.9).setScale(1);
 
       this.scene.tweens.add({
-        targets: particle,
+        targets: p,
         x: x + Math.cos(angle) * speed,
         y: y + Math.sin(angle) * speed,
         alpha: 0,
         scale: 0.2,
         duration: Phaser.Math.Between(200, 400),
         ease: 'Power2',
-        onComplete: () => particle.destroy(),
+        onComplete: () => this.releaseParticle(p),
       });
     }
   }
 
-  /** Floating damage number */
   damageNumber(x: number, y: number, amount: number, isCrit = false): void {
-    const color = isCrit ? '#ffdd44' : '#ffffff';
-    const size = isCrit ? '16px' : '12px';
+    const t = this.getText();
+    if (!t) return;
 
-    const text = this.scene.add.text(x, y - 10, `${amount}`, {
-      fontSize: size,
-      fontFamily: 'monospace',
-      color,
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(20);
+    t.setStyle(isCrit ? TEXT_STYLES.damageCrit : TEXT_STYLES.damage);
+    t.setText(`${amount}`);
+    t.setPosition(x, y - 10).setActive(true).setVisible(true).setAlpha(1);
 
     this.scene.tweens.add({
-      targets: text,
+      targets: t,
       y: y - 50,
       alpha: 0,
       duration: 600,
       ease: 'Power2',
-      onComplete: () => text.destroy(),
+      onComplete: () => this.releaseText(t),
     });
   }
 
-  /** XP pickup sparkle */
   pickupSparkle(x: number, y: number): void {
     for (let i = 0; i < 4; i++) {
+      const p = this.getParticle();
+      if (!p) break;
       const px = x + Phaser.Math.Between(-8, 8);
       const py = y + Phaser.Math.Between(-8, 8);
-      const spark = this.scene.add.rectangle(px, py, 3, 3, 0xffff88, 1);
-      spark.setDepth(15);
+      p.setPosition(px, py).setSize(3, 3).setFillStyle(0xffff88, 1);
+      p.setActive(true).setVisible(true).setAlpha(1).setScale(1);
       this.scene.tweens.add({
-        targets: spark,
-        y: py - 20,
-        alpha: 0,
-        scale: 0,
+        targets: p,
+        y: py - 20, alpha: 0, scale: 0,
         duration: 300,
-        onComplete: () => spark.destroy(),
+        onComplete: () => this.releaseParticle(p),
       });
     }
   }
 
-  /** Full-screen flash (level up, evolution) */
   screenFlash(color = 0xffffff, alpha = 0.4, duration = 300): void {
     const cam = this.scene.cameras.main;
     const flash = this.scene.add.rectangle(
-      cam.width / 2, cam.height / 2,
-      cam.width, cam.height,
-      color, alpha
+      cam.width / 2, cam.height / 2, cam.width, cam.height, color, alpha
     ).setScrollFactor(0).setDepth(500);
-
     this.scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      duration,
+      targets: flash, alpha: 0, duration,
       onComplete: () => flash.destroy(),
     });
   }
 
-  /** Boss warning banner */
   bossWarning(text = 'BOSS INCOMING!'): void {
     const cam = this.scene.cameras.main;
-
     const bg = this.scene.add.rectangle(
-      cam.width / 2, cam.height * 0.2,
-      cam.width, 60,
-      0x000000, 0.7
+      cam.width / 2, cam.height * 0.2, cam.width, 60, 0x000000, 0.7
     ).setScrollFactor(0).setDepth(450);
-
     const label = this.scene.add.text(cam.width / 2, cam.height * 0.2, text, {
-      fontSize: '32px',
-      fontFamily: 'monospace',
-      color: '#ff0000',
-      stroke: '#000',
-      strokeThickness: 4,
+      fontSize: '32px', fontFamily: 'monospace', color: '#ff0000',
+      stroke: '#000', strokeThickness: 4,
     }).setScrollFactor(0).setDepth(451).setOrigin(0.5);
-
-    // Pulse then fade
     this.scene.tweens.add({
       targets: [label],
-      alpha: { from: 1, to: 0.3 },
-      yoyo: true,
-      repeat: 3,
-      duration: 300,
+      alpha: { from: 1, to: 0.3 }, yoyo: true, repeat: 3, duration: 300,
       onComplete: () => {
         this.scene.tweens.add({
-          targets: [bg, label],
-          alpha: 0,
-          duration: 500,
-          onComplete: () => {
-            bg.destroy();
-            label.destroy();
-          },
+          targets: [bg, label], alpha: 0, duration: 500,
+          onComplete: () => { bg.destroy(); label.destroy(); },
         });
       },
     });
   }
 
-  /** Kill streak text popup */
   killStreak(count: number): void {
-    const cam = this.scene.cameras.main;
     let msg = '';
     let color = '#ffffff';
-
     if (count >= 100) { msg = `${count} KILLS! UNSTOPPABLE!`; color = '#ff4444'; }
     else if (count >= 50) { msg = `${count} KILLS! MASSACRE!`; color = '#ff8844'; }
     else if (count >= 25) { msg = `${count} KILLS! RAMPAGE!`; color = '#ffdd44'; }
     else return;
 
+    const cam = this.scene.cameras.main;
     const text = this.scene.add.text(cam.width / 2, cam.height * 0.35, msg, {
-      fontSize: '20px',
-      fontFamily: 'monospace',
-      color,
-      stroke: '#000',
-      strokeThickness: 3,
+      ...TEXT_STYLES.announcement, color,
     }).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
-
     this.scene.tweens.add({
-      targets: text,
-      alpha: 1,
-      scale: { from: 0.5, to: 1.2 },
-      duration: 300,
-      yoyo: true,
-      hold: 500,
+      targets: text, alpha: 1, scale: { from: 0.5, to: 1.2 },
+      duration: 300, yoyo: true, hold: 500,
       onComplete: () => text.destroy(),
     });
   }
 
-  /** Chest open burst */
   chestBurst(x: number, y: number): void {
     const colors = [0xffdd44, 0xffaa00, 0xffffff, 0x44ddff];
     for (let i = 0; i < 16; i++) {
+      const p = this.getParticle();
+      if (!p) break;
       const angle = (i / 16) * Math.PI * 2;
       const speed = Phaser.Math.Between(80, 180);
-      const color = colors[i % colors.length];
-      const p = this.scene.add.rectangle(x, y, 4, 4, color, 1).setDepth(20);
+      p.setPosition(x, y).setSize(4, 4).setFillStyle(colors[i % 4], 1);
+      p.setActive(true).setVisible(true).setAlpha(1).setScale(1);
       this.scene.tweens.add({
         targets: p,
         x: x + Math.cos(angle) * speed,
@@ -180,12 +187,11 @@ export class VFX {
         alpha: 0,
         duration: Phaser.Math.Between(300, 600),
         ease: 'Power2',
-        onComplete: () => p.destroy(),
+        onComplete: () => this.releaseParticle(p),
       });
     }
   }
 
-  /** Evolution weapon glow effect */
   evolutionGlow(x: number, y: number): void {
     this.screenFlash(0xffdd44, 0.6, 500);
     this.chestBurst(x, y);

@@ -46,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   private bossWarningShown = new Set<number>();
   private lastWaveTime = 0;
   private xpMul = 1;
+  private inHitstop = false;
 
   // Passive tracking
   private ownedPassives = new Map<string, number>();
@@ -268,10 +269,10 @@ export class GameScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.keyboard!.on('keydown-ESC', () => {
-      if (!this.gameOver && !this.levelUpUI) this.togglePause();
+      if (!this.gameOver && !this.levelUpUI && !this.inHitstop) this.togglePause();
     });
     this.input.keyboard!.on('keydown-P', () => {
-      if (!this.gameOver && !this.levelUpUI) this.togglePause();
+      if (!this.gameOver && !this.levelUpUI && !this.inHitstop) this.togglePause();
     });
     this.input.keyboard!.on('keydown-M', () => {
       const muted = soundEngine.toggleMute();
@@ -454,9 +455,12 @@ export class GameScene extends Phaser.Scene {
   // ── Hitstop ──
 
   private hitstop(durationMs: number): void {
+    if (this.inHitstop) return;
+    this.inHitstop = true;
     this.physics.pause();
     this.time.timeScale = 0;
     this.time.delayedCall(durationMs, () => {
+      this.inHitstop = false;
       if (!this.paused && !this.gameOver) {
         this.physics.resume();
         this.time.timeScale = 1;
