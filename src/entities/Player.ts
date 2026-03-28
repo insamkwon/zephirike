@@ -56,6 +56,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(10);
     this.setCollideWorldBounds(true);
 
+    // Subtle idle bob animation
+    scene.tweens.add({
+      targets: this,
+      y: y - 2,
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Player glow (preFX)
+    try {
+      this.preFX?.addGlow(0x4488ff, 2, 0, false, 0.1, 10);
+    } catch { /* Canvas renderer fallback — no preFX */ }
+
     const b = bonuses ?? { bonusHp: 0, speedMul: 1, damageMul: 1, xpMul: 1, magnetMul: 1 };
     this.maxHp = PLAYER_MAX_HP + b.bonusHp;
     this.hp = this.maxHp;

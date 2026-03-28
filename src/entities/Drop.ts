@@ -40,12 +40,28 @@ export class Drop extends Phaser.Physics.Arcade.Sprite {
     body.setDrag(100);
     body.setCollideWorldBounds(true);
 
-    // Visual styling
+    // Visual styling + animations
     if (type === 'xp') {
       if (value >= 10) { this.setTint(0x44ff44); this.setScale(1.3); }
       else if (value >= 5) { this.setTint(0x4488ff); }
+      // Slow rotation
+      scene.tweens.add({
+        targets: this,
+        rotation: Math.PI * 2,
+        duration: 2000 + Phaser.Math.Between(0, 500),
+        repeat: -1,
+      });
+      this.setBlendMode(Phaser.BlendModes.ADD);
+    } else if (type === 'gold') {
+      // Shimmer
+      scene.tweens.add({
+        targets: this,
+        alpha: { from: 0.7, to: 1 },
+        yoyo: true, repeat: -1, duration: 300 + Phaser.Math.Between(0, 200),
+      });
     } else if (type === 'chest') {
       this.setScale(1.5);
+      try { this.preFX?.addGlow(0xffdd44, 3, 0, false, 0.1, 8); } catch {}
     }
   }
 

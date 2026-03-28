@@ -7,7 +7,6 @@ import {
   PROJECTILE_SPREAD_ANGLE,
   ORB_HIT_RADIUS,
   ORB_ANGULAR_SPEED_FACTOR,
-  MELEE_VISUAL_HEIGHT,
   AREA_TICK_MS,
   AREA_OFFSET_RANGE,
   AREA_FADE_MS,
@@ -73,13 +72,36 @@ export class WeaponManager {
   }
 
   private rebuildOrbs(weapon: OwnedWeapon): void {
-    if (weapon.orbs) weapon.orbs.forEach(o => o.destroy());
+    if (weapon.orbs) {
+      weapon.orbs.forEach(o => {
+        const trail = o.getData('trail') as Phaser.GameObjects.Particles.ParticleEmitter | null;
+        if (trail) trail.destroy();
+        o.destroy();
+      });
+    }
     const stats = weapon.def.levels[weapon.level];
     weapon.orbs = [];
     for (let i = 0; i < stats.count; i++) {
       const orb = this.scene.add.sprite(this.player.x, this.player.y, 'orb');
       orb.setDepth(9);
+      orb.setBlendMode(Phaser.BlendModes.ADD);
       orb.setData('angle', (i / stats.count) * Math.PI * 2);
+
+      // Trail particles following the orb
+      const texture = this.scene.textures.exists('soft_glow') ? 'soft_glow' : 'orb';
+      const trail = this.scene.add.particles(0, 0, texture, {
+        speed: 0,
+        scale: { start: 0.3, end: 0 },
+        alpha: { start: 0.5, end: 0 },
+        lifespan: 200,
+        frequency: 30,
+        blendMode: Phaser.BlendModes.ADD,
+        tint: weapon.def.color,
+      });
+      trail.startFollow(orb);
+      trail.setDepth(8);
+      orb.setData('trail', trail);
+
       weapon.orbs.push(orb);
     }
   }
@@ -159,15 +181,21 @@ export class WeaponManager {
   }
 
   private showSlash(x: number, y: number, width: number, color: number, duration: number): void {
-    const slash = this.scene.add.rectangle(x, y, width, MELEE_VISUAL_HEIGHT, color, 0.6);
-    slash.setDepth(9);
-    this.scene.tweens.add({
-      targets: slash,
-      alpha: 0,
-      scaleY: 2,
-      duration,
-      onComplete: () => slash.destroy(),
+    // Arc slash using particle burst instead of rectangle
+    const texture = this.scene.textures.exists('soft_glow') ? 'soft_glow' : 'xp_gem';
+    const emitter = this.scene.add.particles(x, y, texture, {
+      speed: { min: 40, max: 120 },
+      angle: { min: -30, max: 30 },
+      scale: { start: 1, end: 0 },
+      alpha: { start: 0.8, end: 0 },
+      lifespan: duration,
+      tint: color,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
     });
+    emitter.setDepth(9);
+    emitter.explode(Math.floor(width / 10));
+    this.scene.time.delayedCall(duration + 100, () => emitter.destroy());
   }
 
   // ── Area ──
@@ -343,7 +371,13 @@ export class WeaponManager {
 
   destroy(): void {
     for (const w of this.weapons) {
-      if (w.orbs) w.orbs.forEach(o => o.destroy());
+      if (w.orbs) {
+        w.orbs.forEach(o => {
+          const trail = o.getData('trail') as Phaser.GameObjects.Particles.ParticleEmitter | null;
+          if (trail) trail.destroy();
+          o.destroy();
+        });
+      }
     }
     this.projectiles.destroy(true);
   }

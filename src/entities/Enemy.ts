@@ -70,6 +70,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         alpha: { from: 1, to: 0.7 },
         yoyo: true, repeat: -1, duration: 400,
       });
+      try { this.preFX?.addGlow(0xffdd44, 3, 0, false, 0.1, 8); } catch {}
+    }
+
+    if (def.isBoss) {
+      try { this.preFX?.addGlow(0xff0000, 4, 0, false, 0.15, 12); } catch {}
     }
   }
 
@@ -338,6 +343,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private die(): void {
     this.scene.events.emit('enemy-killed', this);
-    this.destroy();
+    // Death animation: shrink + spin + fade
+    this.setVelocity(0, 0);
+    this.body!.enable = false;
+    this.scene.tweens.add({
+      targets: this,
+      scale: 0,
+      rotation: this.rotation + 3,
+      alpha: 0,
+      duration: 200,
+      ease: 'Power2',
+      onComplete: () => this.destroy(),
+    });
   }
 }

@@ -29,6 +29,9 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.setRotation(angle);
 
+    // Glow effect — ADD blend makes projectiles luminous
+    this.setBlendMode(Phaser.BlendModes.ADD);
+
     // Cancel previous timer if reused from pool
     if (this.lifetimeTimer) {
       this.lifetimeTimer.destroy();
