@@ -12,24 +12,45 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   damage: number;
   xpValue: number;
   speed: number;
+  isElite: boolean;
   private damageTween: Phaser.Tweens.Tween | null = null;
+  private eliteGlow: Phaser.GameObjects.Graphics | null = null;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, def: EnemyDef, hpMul = 1, speedMul = 1) {
+  constructor(
+    scene: Phaser.Scene, x: number, y: number,
+    def: EnemyDef, hpMul = 1, speedMul = 1, elite = false
+  ) {
     super(scene, x, y, `enemy_${def.key}`);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
     this.uid = nextEnemyId++;
     this.enemyDef = def;
-    this.maxHp = Math.floor(def.hp * hpMul);
+    this.isElite = elite;
+
+    const eliteMul = elite ? 3 : 1;
+    this.maxHp = Math.floor(def.hp * hpMul * eliteMul);
     this.hp = this.maxHp;
-    this.damage = def.damage;
-    this.xpValue = def.xp;
-    this.speed = def.speed * speedMul;
+    this.damage = Math.floor(def.damage * (elite ? 1.5 : 1));
+    this.xpValue = Math.floor(def.xp * (elite ? 5 : 1));
+    this.speed = def.speed * speedMul * (elite ? 0.8 : 1);
 
     this.setDepth(5);
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCircle(def.size, -def.size + 8, -def.size + 8);
+
+    if (elite) {
+      this.setScale(1.5);
+      this.setTint(0xffdd44);
+      // Pulsing glow effect
+      scene.tweens.add({
+        targets: this,
+        alpha: { from: 1, to: 0.7 },
+        yoyo: true,
+        repeat: -1,
+        duration: 400,
+      });
+    }
   }
 
   chasePlayer(playerX: number, playerY: number): void {
@@ -44,18 +65,19 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): boolean {
     this.hp -= amount;
 
-    // Flash white
-    this.setTint(0xffffff);
+    this.setTint(this.isElite ? 0xffff88 : 0xffffff);
     if (this.damageTween) this.damageTween.stop();
     this.damageTween = this.scene.tweens.add({
       targets: this,
       duration: ENEMY_DAMAGE_FLASH_MS,
       onComplete: () => {
-        if (this.active) this.clearTint();
+        if (this.active) {
+          if (this.isElite) this.setTint(0xffdd44);
+          else this.clearTint();
+        }
       },
     });
 
-    // Knockback — reverse current velocity briefly
     const body = this.body as Phaser.Physics.Arcade.Body;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
@@ -73,6 +95,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   private die(): void {
+    if (this.eliteGlow) this.eliteGlow.destroy();
     this.scene.events.emit('enemy-killed', this);
     this.destroy();
   }

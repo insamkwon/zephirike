@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WEAPONS, WeaponDef } from '../config/weaponConfig';
+import { EVOLUTIONS } from '../config/evolutionConfig';
 import {
   PROJECTILE_POOL_SIZE,
   PROJECTILE_OFFSCREEN_MARGIN,
@@ -250,6 +251,41 @@ export class WeaponManager {
         proj.deactivate();
       }
     }
+  }
+
+  // ── Evolution ──
+
+  /** Check if any evolution is available */
+  getAvailableEvolution(): { weapon1: string; weapon2: string; resultDef: WeaponDef } | null {
+    for (const evo of EVOLUTIONS) {
+      const w1 = this.weapons.find(w => w.id === evo.weapon1);
+      const w2 = this.weapons.find(w => w.id === evo.weapon2);
+      if (!w1 || !w2) continue;
+      if (w1.level >= w1.def.maxLevel - 1 && w2.level >= w2.def.maxLevel - 1) {
+        // Check not already evolved
+        if (!this.weapons.find(w => w.id === evo.result.id)) {
+          return { weapon1: evo.weapon1, weapon2: evo.weapon2, resultDef: evo.result };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Perform evolution — removes both source weapons, adds evolved weapon */
+  evolve(weapon1Id: string, weapon2Id: string, resultDef: WeaponDef): void {
+    // Remove source weapons
+    for (const id of [weapon1Id, weapon2Id]) {
+      const idx = this.weapons.findIndex(w => w.id === id);
+      if (idx >= 0) {
+        const w = this.weapons[idx];
+        if (w.orbs) w.orbs.forEach(o => o.destroy());
+        this.weapons.splice(idx, 1);
+      }
+    }
+
+    // Register the evolved weapon def so addWeapon can find it
+    WEAPONS[resultDef.id] = resultDef;
+    this.addWeapon(resultDef.id);
   }
 
   // ── Upgrade Options ──

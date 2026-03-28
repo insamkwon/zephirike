@@ -68,7 +68,9 @@ export class WaveManager {
 
   private spawnEnemy(def: EnemyDef, hpMul: number, speedMul: number): void {
     const pos = this.getSpawnPosition();
-    const enemy = new Enemy(this.scene, pos.x, pos.y, def, hpMul, speedMul);
+    // 3% chance of elite enemy (non-boss)
+    const isElite = !def.isBoss && Math.random() < 0.03;
+    const enemy = new Enemy(this.scene, pos.x, pos.y, def, hpMul, speedMul, isElite);
     this.enemyPool.add(enemy);
   }
 

@@ -3,10 +3,6 @@ import { Drop } from '../entities/Drop';
 import { Player } from '../entities/Player';
 import { HEALTH_DROP_AMOUNT } from '../config/constants';
 
-/**
- * Manages all ground drops (XP gems, health pickups).
- * Uses the unified Drop class for consistent behavior.
- */
 export class DropManager {
   private scene: Phaser.Scene;
   private player: Player;
@@ -24,6 +20,14 @@ export class DropManager {
 
   spawnHealthDrop(x: number, y: number): void {
     this.drops.add(new Drop(this.scene, x, y, 'health', HEALTH_DROP_AMOUNT));
+  }
+
+  spawnGold(x: number, y: number, amount: number): void {
+    this.drops.add(new Drop(this.scene, x, y, 'gold', amount));
+  }
+
+  spawnChest(x: number, y: number): void {
+    this.drops.add(new Drop(this.scene, x, y, 'chest', 1));
   }
 
   update(): void {
