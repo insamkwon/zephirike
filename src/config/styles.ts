@@ -19,7 +19,7 @@ export const TEXT_STYLES = {
     fontFamily: '"Courier New", monospace',
     color: '#ffffff',
     stroke: '#000000',
-    strokeThickness: 3,
+    strokeThickness: 2,
   },
   caption: {
     fontSize: '12px',
@@ -33,7 +33,7 @@ export const TEXT_STYLES = {
     fontFamily: '"Courier New", monospace',
     color: '#ffffff',
     stroke: '#000000',
-    strokeThickness: 3,
+    strokeThickness: 2,
   },
   announcement: {
     fontSize: '22px',
@@ -47,7 +47,7 @@ export const TEXT_STYLES = {
     fontFamily: '"Courier New", monospace',
     color: '#ffffff',
     stroke: '#000000',
-    strokeThickness: 3,
+    strokeThickness: 2,
   },
   damageCrit: {
     fontSize: '18px',
