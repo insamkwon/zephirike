@@ -36,7 +36,7 @@ export class DropManager {
       const drop = children[i];
       if (!drop.active) continue;
 
-      const result = drop.attract(this.player.x, this.player.y);
+      const result = drop.attract(this.player.x, this.player.y, this.player.magnetRange);
       if (result === 'pickup') {
         this.scene.events.emit('drop-collected', drop);
         drop.destroy();

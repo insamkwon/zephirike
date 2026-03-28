@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { WEAPONS, WeaponDef } from '../config/weaponConfig';
+import { PASSIVES } from '../config/passiveConfig';
 import { LEVEL_UP_CHOICES } from '../config/constants';
 
 export interface UpgradeOption {
@@ -70,10 +71,27 @@ export class LevelUpUI {
 
     for (let i = 0; i < count; i++) {
       const opt = options[i];
-      const def = ownedWeaponDefs.get(opt.weaponId) ?? WEAPONS[opt.weaponId];
-      if (!def) continue;
-
-      this.buildCard(startX + i * (cardWidth + gap), h / 2 + 20, cardWidth, opt, def, i);
+      // Check if this is a passive item
+      const passive = PASSIVES[opt.weaponId];
+      if (passive) {
+        const fakeDef: WeaponDef = {
+          id: passive.id,
+          name: passive.name,
+          type: 'area',
+          icon: passive.icon,
+          color: 0x88bbff,
+          maxLevel: passive.maxLevel,
+          levels: passive.descriptions.map(d => ({
+            damage: 0, cooldown: 0, count: 0, pierce: 0, area: 0,
+            speed: 0, duration: 0, description: d,
+          })),
+        };
+        this.buildCard(startX + i * (cardWidth + gap), h / 2 + 20, cardWidth, opt, fakeDef, i);
+      } else {
+        const def = ownedWeaponDefs.get(opt.weaponId) ?? WEAPONS[opt.weaponId];
+        if (!def) continue;
+        this.buildCard(startX + i * (cardWidth + gap), h / 2 + 20, cardWidth, opt, def, i);
+      }
     }
 
     // Keyboard shortcuts — cleaned up properly

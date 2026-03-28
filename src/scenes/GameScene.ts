@@ -8,10 +8,14 @@ import { EnemyPool } from '../systems/EnemyPool';
 import { WaveManager } from '../systems/WaveManager';
 import { DropManager } from '../systems/DropManager';
 import { HUD } from '../ui/HUD';
-import { LevelUpUI } from '../ui/LevelUpUI';
+import { LevelUpUI, UpgradeOption } from '../ui/LevelUpUI';
+import { Minimap } from '../ui/Minimap';
 import { VFX } from '../systems/VFX';
 import { soundEngine } from '../systems/SoundEngine';
+import { bgm } from '../systems/BGM';
 import { addGold, getMetaBonuses } from '../config/metaConfig';
+import { PASSIVES } from '../config/passiveConfig';
+import { WeaponDef } from '../config/weaponConfig';
 import {
   WORLD_WIDTH, WORLD_HEIGHT,
   GAME_DURATION_SECONDS,
@@ -29,6 +33,7 @@ export class GameScene extends Phaser.Scene {
   private waveManager!: WaveManager;
   private dropManager!: DropManager;
   private hud!: HUD;
+  private minimap!: Minimap;
   private vfx!: VFX;
   private levelUpUI: LevelUpUI | null = null;
   private damageOverlay!: Phaser.GameObjects.Rectangle;
@@ -39,8 +44,12 @@ export class GameScene extends Phaser.Scene {
   private goldEarned = 0;
   private lastKillMilestone = 0;
   private bossWarningShown = new Set<number>();
+  private lastWaveTime = 0;
   private damageMul = 1;
   private xpMul = 1;
+
+  // Passive tracking
+  private ownedPassives = new Map<string, number>();
 
   constructor() {
     super({ key: 'GameScene' });
@@ -54,7 +63,9 @@ export class GameScene extends Phaser.Scene {
     this.levelUpUI = null;
     this.goldEarned = 0;
     this.lastKillMilestone = 0;
+    this.lastWaveTime = 0;
     this.bossWarningShown = new Set();
+    this.ownedPassives = new Map();
   }
 
   create(): void {
@@ -70,6 +81,13 @@ export class GameScene extends Phaser.Scene {
     this.setupCollisions();
     this.setupEvents();
     this.setupInput();
+
+    // Start BGM
+    if ((soundEngine as unknown as { ctx: AudioContext | null }).ctx) {
+      const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
+      const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
+      bgm.start(ctx, master);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -83,17 +101,29 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Boss warnings at key moments
     this.checkBossWarnings(elapsed);
+    this.checkWaveTransitions(elapsed);
 
-    this.player.update();
+    this.player.update(delta);
     this.waveManager.update(elapsed);
     this.weaponManager.update(time);
     this.dropManager.update();
     this.enemyPool.updateEnemies(this.player.x, this.player.y);
-    this.hud.update(elapsed, this.buildWeaponInfo());
+    this.minimap.update();
 
-    // Kill streak check
+    // Update BGM intensity
+    bgm.setIntensity(elapsed, GAME_DURATION_SECONDS);
+
+    // Build HUD info
+    const weaponStr = this.weaponManager.weapons
+      .map(w => `${w.def.icon}${w.def.name} Lv${w.level + 1}`)
+      .join(' ');
+    const passiveStr = Array.from(this.ownedPassives.entries())
+      .map(([id, lv]) => `${PASSIVES[id].icon}${lv}`)
+      .join(' ');
+    const evoReady = !!this.weaponManager.getAvailableEvolution();
+
+    this.hud.update(elapsed, weaponStr, this.goldEarned, passiveStr, evoReady);
     this.checkKillStreak();
   }
 
@@ -107,10 +137,7 @@ export class GameScene extends Phaser.Scene {
       WORLD_WIDTH, WORLD_HEIGHT, 'floor_tile'
     ).setDepth(0);
 
-    this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
-    // Apply meta bonuses
-    this.player.maxHp += bonuses.bonusHp;
-    this.player.hp = this.player.maxHp;
+    this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, bonuses);
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -129,9 +156,11 @@ export class GameScene extends Phaser.Scene {
     this.waveManager = new WaveManager(this, this.enemyPool);
     this.dropManager = new DropManager(this, this.player);
     this.hud = new HUD(this, this.player);
+    this.minimap = new Minimap(this, this.player, this.enemyPool);
   }
 
   private setupCollisions(): void {
+    // Enemy → Player
     this.physics.add.overlap(
       this.player, this.enemyPool.group,
       (_p, obj) => {
@@ -145,6 +174,7 @@ export class GameScene extends Phaser.Scene {
       undefined, this
     );
 
+    // Projectile → Enemy
     this.physics.add.overlap(
       this.weaponManager.projectiles, this.enemyPool.group,
       (pObj, eObj) => {
@@ -152,10 +182,17 @@ export class GameScene extends Phaser.Scene {
         const enemy = eObj as Enemy;
         if (!proj.active || !enemy.active) return;
         proj.onHitEnemy(enemy.uid);
-        const dmg = Math.floor(proj.damage * this.damageMul);
+        const dmg = Math.floor(proj.damage * this.getTotalDamageMul());
         const killed = enemy.takeDamage(dmg);
         this.vfx.damageNumber(enemy.x, enemy.y - 10, dmg);
-        if (!killed) soundEngine.hit();
+        if (killed) {
+          // Hitstop for bosses/elites
+          if (enemy.enemyDef.isBoss || enemy.isElite) {
+            this.hitstop(enemy.enemyDef.isBoss ? 120 : 50);
+          }
+        } else {
+          soundEngine.hit();
+        }
       },
       undefined, this
     );
@@ -165,8 +202,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('enemy-killed', (enemy: Enemy) => {
       this.player.kills++;
 
-      // VFX + Sound
-      this.vfx.deathBurst(enemy.x, enemy.y, enemy.enemyDef.color);
+      this.vfx.deathBurst(enemy.x, enemy.y, enemy.enemyDef.color, enemy.isElite ? 16 : 8);
       soundEngine.kill();
       if (enemy.enemyDef.isBoss) {
         this.vfx.shake(0.015, 500);
@@ -177,18 +213,23 @@ export class GameScene extends Phaser.Scene {
       const xpValue = Math.floor(enemy.xpValue * this.xpMul);
       this.dropManager.spawnXpGem(enemy.x, enemy.y, xpValue);
 
-      // Gold from kills
-      const goldAmount = enemy.enemyDef.isBoss ? 50 : (enemy.isElite ? 10 : Phaser.Math.Between(1, 3));
+      // Gold
+      const luckGoldBonus = this.player.luckLevel >= 3 ? 1.5 : 1;
+      const goldAmount = Math.floor(
+        (enemy.enemyDef.isBoss ? 50 : (enemy.isElite ? 10 : Phaser.Math.Between(1, 3)))
+        * luckGoldBonus
+      );
       this.dropManager.spawnGold(
         enemy.x + Phaser.Math.Between(-10, 10),
         enemy.y + Phaser.Math.Between(-10, 10),
         goldAmount
       );
 
-      // Health drop
+      // Health drop (luck boosts chance)
       const elapsed = Math.floor(this.gameTimer);
       const bonusChance = Math.floor(elapsed / HEALTH_DROP_SCALING_INTERVAL) * 0.02;
-      if (Math.random() < HEALTH_DROP_CHANCE + bonusChance) {
+      const luckMul = this.player.luckLevel >= 2 ? 3 : (this.player.luckLevel >= 1 ? 2 : 1);
+      if (Math.random() < (HEALTH_DROP_CHANCE + bonusChance) * luckMul) {
         this.dropManager.spawnHealthDrop(enemy.x, enemy.y);
       }
 
@@ -240,7 +281,13 @@ export class GameScene extends Phaser.Scene {
       if (!this.gameOver && !this.levelUpUI) this.togglePause();
     });
     this.input.keyboard!.on('keydown-M', () => {
-      soundEngine.toggleMute();
+      const muted = soundEngine.toggleMute();
+      if (muted) bgm.stop();
+      else {
+        const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
+        const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
+        if (ctx && master) bgm.start(ctx, master);
+      }
     });
   }
 
@@ -252,19 +299,36 @@ export class GameScene extends Phaser.Scene {
     soundEngine.levelUp();
     this.vfx.screenFlash(0xffdd44, 0.3, 200);
 
-    // Check for weapon evolution first
+    // Check evolution
     const evo = this.weaponManager.getAvailableEvolution();
     if (evo) {
       this.showEvolution(evo);
       return;
     }
 
-    const options = this.weaponManager.getUpgradeOptions(LEVEL_UP_CHOICES);
+    // Build combined options: weapons + passives
+    const weaponOptions = this.weaponManager.getUpgradeOptions(LEVEL_UP_CHOICES + 2);
+    const passiveOptions = this.getPassiveOptions(2);
+    const allOptions: UpgradeOption[] = [
+      ...weaponOptions.map(o => ({ ...o, isPassive: false })),
+      ...passiveOptions,
+    ];
+    // Shuffle and take LEVEL_UP_CHOICES
+    Phaser.Utils.Array.Shuffle(allOptions);
+    const finalOptions = allOptions.slice(0, LEVEL_UP_CHOICES);
+
     this.levelUpUI = new LevelUpUI(
-      this, this.player.level, options,
+      this, this.player.level, finalOptions,
       this.weaponManager.getOwnedDefs(),
       (weaponId) => {
-        this.weaponManager.addWeapon(weaponId);
+        // Check if it's a passive
+        if (PASSIVES[weaponId]) {
+          const currentLv = this.ownedPassives.get(weaponId) ?? 0;
+          this.ownedPassives.set(weaponId, currentLv + 1);
+          this.player.applyPassive(weaponId, currentLv + 1);
+        } else {
+          this.weaponManager.addWeapon(weaponId);
+        }
         this.levelUpUI = null;
         this.paused = false;
         this.physics.resume();
@@ -272,38 +336,45 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  private showEvolution(evo: { weapon1: string; weapon2: string; resultDef: import('../config/weaponConfig').WeaponDef }): void {
+  private getPassiveOptions(count: number): UpgradeOption[] {
+    const options: UpgradeOption[] = [];
+    for (const [id, def] of Object.entries(PASSIVES)) {
+      const currentLv = this.ownedPassives.get(id) ?? 0;
+      if (currentLv < def.maxLevel) {
+        options.push({
+          weaponId: id,
+          nextLevel: currentLv,
+          isNew: currentLv === 0,
+        });
+      }
+    }
+    Phaser.Utils.Array.Shuffle(options);
+    return options.slice(0, count);
+  }
+
+  private showEvolution(evo: { weapon1: string; weapon2: string; resultDef: WeaponDef }): void {
     soundEngine.evolution();
     this.vfx.evolutionGlow(this.player.x, this.player.y);
 
     const cam = this.cameras.main;
     const elements: Phaser.GameObjects.GameObject[] = [];
 
-    const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.8)
-      .setScrollFactor(0).setDepth(300);
-    elements.push(overlay);
-
-    const title = this.add.text(cam.width / 2, 100, 'WEAPON EVOLUTION!', {
+    elements.push(this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.8)
+      .setScrollFactor(0).setDepth(300));
+    elements.push(this.add.text(cam.width / 2, 100, 'WEAPON EVOLUTION!', {
       fontSize: '32px', fontFamily: 'monospace', color: '#ffdd44',
       stroke: '#000', strokeThickness: 4,
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5);
-    elements.push(title);
-
-    const desc = this.add.text(cam.width / 2, 160, `${evo.resultDef.icon} ${evo.resultDef.name}`, {
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
+    elements.push(this.add.text(cam.width / 2, 160, `${evo.resultDef.icon} ${evo.resultDef.name}`, {
       fontSize: '24px', fontFamily: 'monospace', color: '#ffffff',
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5);
-    elements.push(desc);
-
-    const detail = this.add.text(cam.width / 2, 200, evo.resultDef.levels[0].description, {
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
+    elements.push(this.add.text(cam.width / 2, 200, evo.resultDef.levels[0].description, {
       fontSize: '14px', fontFamily: 'monospace', color: '#aaaaaa',
       wordWrap: { width: 400 }, align: 'center',
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5);
-    elements.push(detail);
-
-    const hint = this.add.text(cam.width / 2, 280, 'Press any key to continue', {
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
+    elements.push(this.add.text(cam.width / 2, 280, 'Press any key to continue', {
       fontSize: '16px', fontFamily: 'monospace', color: '#44ff44',
-    }).setScrollFactor(0).setDepth(301).setOrigin(0.5);
-    elements.push(hint);
+    }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
 
     const handler = () => {
       this.input.keyboard!.off('keydown', handler);
@@ -320,11 +391,9 @@ export class GameScene extends Phaser.Scene {
   // ── Chest ──
 
   private openChest(): void {
-    // Give a random weapon upgrade
     const options = this.weaponManager.getUpgradeOptions(1);
     if (options.length > 0) {
       this.weaponManager.addWeapon(options[0].weaponId);
-      // Show brief notification
       const cam = this.cameras.main;
       const def = this.weaponManager.weapons.find(w => w.id === options[0].weaponId)?.def;
       const msg = def
@@ -337,12 +406,8 @@ export class GameScene extends Phaser.Scene {
       }).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
 
       this.tweens.add({
-        targets: text,
-        alpha: 1,
-        y: cam.height * 0.35,
-        duration: 300,
-        hold: 1000,
-        yoyo: true,
+        targets: text, alpha: 1, y: cam.height * 0.35,
+        duration: 300, hold: 1000, yoyo: true,
         onComplete: () => text.destroy(),
       });
     }
@@ -351,12 +416,35 @@ export class GameScene extends Phaser.Scene {
   // ── Boss Warnings ──
 
   private checkBossWarnings(elapsed: number): void {
-    const bossTimings = [295, 595, 775]; // 5s before each boss
+    const bossTimings = [295, 595, 775];
     for (const t of bossTimings) {
       if (elapsed >= t && !this.bossWarningShown.has(t)) {
         this.bossWarningShown.add(t);
         this.vfx.bossWarning();
         soundEngine.bossWarning();
+      }
+    }
+  }
+
+  // ── Wave Transitions ──
+
+  private checkWaveTransitions(elapsed: number): void {
+    const waveTimes = [30, 60, 90, 120, 180, 240, 300, 420, 600, 780];
+    for (const t of waveTimes) {
+      if (elapsed >= t && this.lastWaveTime < t) {
+        this.lastWaveTime = t;
+        soundEngine.waveTransition();
+        const cam = this.cameras.main;
+        const waveNum = waveTimes.indexOf(t) + 2;
+        const text = this.add.text(cam.width / 2, cam.height * 0.25, `Wave ${waveNum}`, {
+          fontSize: '22px', fontFamily: 'monospace', color: '#ff8844',
+          stroke: '#000', strokeThickness: 3,
+        }).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({
+          targets: text, alpha: 1, scale: { from: 0.5, to: 1 },
+          duration: 400, hold: 800, yoyo: true,
+          onComplete: () => text.destroy(),
+        });
       }
     }
   }
@@ -374,22 +462,39 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Hitstop ──
+
+  private hitstop(durationMs: number): void {
+    this.physics.pause();
+    this.time.timeScale = 0;
+    this.time.delayedCall(durationMs, () => {
+      if (!this.paused && !this.gameOver) {
+        this.physics.resume();
+        this.time.timeScale = 1;
+      }
+    });
+  }
+
   // ── Pause ──
 
   private togglePause(): void {
     this.paused = !this.paused;
     if (this.paused) {
       this.physics.pause();
+      bgm.stop();
       this.add.text(
         this.cameras.main.width / 2, this.cameras.main.height / 2,
-        'PAUSED\n\nESC/P to resume | M to mute',
+        'PAUSED\n\nESC/P resume | M mute',
         {
-          fontSize: '24px', fontFamily: 'monospace', color: '#ffffff',
+          fontSize: '22px', fontFamily: 'monospace', color: '#ffffff',
           align: 'center', stroke: '#000', strokeThickness: 3,
         }
       ).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseText');
     } else {
       this.physics.resume();
+      const ctx = (soundEngine as unknown as { ctx: AudioContext }).ctx;
+      const master = (soundEngine as unknown as { masterGain: GainNode }).masterGain;
+      if (ctx && master) bgm.start(ctx, master);
       const pt = this.children.getByName('pauseText');
       if (pt) pt.destroy();
     }
@@ -400,6 +505,7 @@ export class GameScene extends Phaser.Scene {
   private endGame(victory: boolean): void {
     this.gameOver = true;
     this.physics.pause();
+    bgm.stop();
 
     const timeStr = this.formatTime(Math.floor(this.gameTimer));
     const prevBest = parseInt(localStorage.getItem('zephirike_best_kills') ?? '0');
@@ -420,15 +526,13 @@ export class GameScene extends Phaser.Scene {
 
   // ── Helpers ──
 
+  private getTotalDamageMul(): number {
+    return this.damageMul + this.player.mightBonus;
+  }
+
   private flashDamageOverlay(): void {
     this.damageOverlay.setAlpha(DAMAGE_OVERLAY_ALPHA);
     this.tweens.add({ targets: this.damageOverlay, alpha: 0, duration: DAMAGE_OVERLAY_FADE_MS });
-  }
-
-  private buildWeaponInfo(): string {
-    return this.weaponManager.weapons
-      .map(w => `${w.def.icon} ${w.def.name} Lv.${w.level + 1}`)
-      .join('  ');
   }
 
   private formatTime(seconds: number): string {

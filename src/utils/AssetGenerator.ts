@@ -236,21 +236,34 @@ function generateWeaponProjectiles(scene: Phaser.Scene): void {
     }
   }
 
-  // Also generate evolved weapon projectiles
+  // Evolved weapon projectiles
   const evolvedProjectiles = [
     { id: 'arcane_storm', color: 0xaa44ff },
+    { id: 'soul_eater', color: 0xff44ff },
+    { id: 'divine_shield', color: 0x44ffff },
   ];
   for (const ep of evolvedProjectiles) {
     const g = scene.add.graphics();
     g.fillStyle(ep.color, 1);
-    g.fillCircle(5, 5, 5);
+    g.fillCircle(6, 6, 6);
     g.fillStyle(0xffffff, 0.5);
-    g.fillCircle(3, 3, 3);
-    g.fillStyle(ep.color, 0.4);
-    g.fillCircle(2, 5, 4);
-    g.generateTexture(`proj_${ep.id}`, 10, 10);
+    g.fillCircle(4, 4, 3);
+    g.fillStyle(ep.color, 0.3);
+    g.fillCircle(3, 6, 5);
+    g.generateTexture(`proj_${ep.id}`, 12, 12);
     g.destroy();
   }
+
+  // Evolved orb texture
+  const og = scene.add.graphics();
+  og.fillStyle(0x44ffff, 1);
+  og.fillCircle(7, 7, 7);
+  og.fillStyle(0xaaffff, 0.6);
+  og.fillCircle(5, 5, 4);
+  og.fillStyle(0xffffff, 0.4);
+  og.fillCircle(4, 4, 2);
+  og.generateTexture('orb_evolved', 14, 14);
+  og.destroy();
 }
 
 function generateFloorTile(scene: Phaser.Scene): void {

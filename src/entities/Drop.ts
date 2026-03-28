@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import {
   DROP_MAGNET_SPEED,
   PLAYER_PICKUP_RANGE,
-  PLAYER_MAGNET_RANGE,
   HEALTH_PICKUP_RANGE,
 } from '../config/constants';
 
@@ -48,7 +47,7 @@ export class Drop extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  attract(playerX: number, playerY: number): 'pickup' | null {
+  attract(playerX: number, playerY: number, magnetRange?: number): 'pickup' | null {
     const dx = this.x - playerX;
     const dy = this.y - playerY;
     const dist2 = dx * dx + dy * dy;
@@ -63,9 +62,10 @@ export class Drop extends Phaser.Physics.Arcade.Sprite {
       ? PLAYER_PICKUP_RANGE : HEALTH_PICKUP_RANGE;
     if (dist2 < pickupRange * pickupRange) return 'pickup';
 
-    const magnetRange = this.dropType === 'xp' || this.dropType === 'gold'
-      ? PLAYER_MAGNET_RANGE : HEALTH_PICKUP_RANGE * 2;
-    if (dist2 < magnetRange * magnetRange || this.attracted) {
+    const effectiveMagnet = magnetRange ?? 150;
+    const magRange = this.dropType === 'xp' || this.dropType === 'gold'
+      ? effectiveMagnet : HEALTH_PICKUP_RANGE * 2;
+    if (dist2 < magRange * magRange || this.attracted) {
       this.attracted = true;
       const dist = Math.sqrt(dist2);
       if (dist > 0) {

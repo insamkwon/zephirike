@@ -66,9 +66,30 @@ export class SoundEngine {
     });
   }
 
-  weaponFire(): void {
-    this.playTone(150, 0.06, 'square', 0.08);
-    this.playNoise(0.03, 0.08);
+  weaponFire(type: 'projectile' | 'melee' | 'area' | 'orbit' = 'projectile'): void {
+    switch (type) {
+      case 'projectile':
+        this.playTone(180, 0.06, 'square', 0.08);
+        this.playNoise(0.03, 0.06);
+        break;
+      case 'melee':
+        this.playSweep(250, 100, 0.1, 'sawtooth', 0.12);
+        this.playNoise(0.05, 0.1);
+        break;
+      case 'area':
+        this.playTone(100, 0.15, 'sine', 0.08);
+        this.playTone(150, 0.1, 'sine', 0.06, 0, 0.05);
+        break;
+      case 'orbit':
+        // Orbit is continuous — no per-fire sound
+        break;
+    }
+  }
+
+  waveTransition(): void {
+    this.playTone(220, 0.15, 'sine', 0.15);
+    this.playTone(330, 0.15, 'sine', 0.12, 0, 0.1);
+    this.playTone(440, 0.2, 'sine', 0.1, 0, 0.2);
   }
 
   bossWarning(): void {

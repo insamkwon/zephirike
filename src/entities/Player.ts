@@ -7,7 +7,16 @@ import {
   DIAGONAL_FACTOR,
   XP_BASE_REQUIRED,
   XP_GROWTH_FACTOR,
+  PLAYER_MAGNET_RANGE,
 } from '../config/constants';
+
+export interface PlayerBonuses {
+  bonusHp: number;
+  speedMul: number;
+  damageMul: number;
+  xpMul: number;
+  magnetMul: number;
+}
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   hp: number;
@@ -18,6 +27,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   kills: number;
   facingRight: boolean;
   invincible: boolean;
+  magnetRange: number;
+
+  // Passive bonuses (accumulated during run)
+  armorReduction = 0;
+  cooldownReduction = 0;
+  luckLevel = 0;
+  mightBonus = 0;
+  recoveryLevel = 0;
+  private recoveryTimer = 0;
+
   private speed: number;
   private lastMoveX: number;
   private wasd: {
@@ -28,7 +47,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   };
   private arrows: Phaser.Types.Input.Keyboard.CursorKeys;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, bonuses?: PlayerBonuses) {
     super(scene, x, y, 'player');
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -36,15 +55,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(10);
     this.setCollideWorldBounds(true);
 
-    this.hp = PLAYER_MAX_HP;
-    this.maxHp = PLAYER_MAX_HP;
+    const b = bonuses ?? { bonusHp: 0, speedMul: 1, damageMul: 1, xpMul: 1, magnetMul: 1 };
+    this.maxHp = PLAYER_MAX_HP + b.bonusHp;
+    this.hp = this.maxHp;
+    this.speed = PLAYER_SPEED * b.speedMul;
+    this.magnetRange = PLAYER_MAGNET_RANGE * b.magnetMul;
+
     this.level = 1;
     this.xp = 0;
     this.xpToNext = XP_BASE_REQUIRED;
     this.kills = 0;
     this.facingRight = true;
     this.invincible = false;
-    this.speed = PLAYER_SPEED;
     this.lastMoveX = 1;
 
     const kb = scene.input.keyboard!;
@@ -57,7 +79,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.arrows = kb.createCursorKeys();
   }
 
-  update(): void {
+  update(delta?: number): void {
     let vx = 0;
     let vy = 0;
 
@@ -78,6 +100,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.facingRight = vx > 0;
       this.setFlipX(!this.facingRight);
     }
+
+    // HP recovery passive
+    if (this.recoveryLevel > 0 && delta) {
+      this.recoveryTimer += delta;
+      const interval = this.recoveryLevel >= 2 ? 3000 : 5000;
+      const amount = this.recoveryLevel >= 3 ? 2 : 1;
+      if (this.recoveryTimer >= interval) {
+        this.recoveryTimer -= interval;
+        this.heal(amount);
+      }
+    }
   }
 
   getFacingDir(): { x: number; y: number } {
@@ -87,7 +120,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): void {
     if (this.invincible || this.hp <= 0) return;
 
-    this.hp = Math.max(0, this.hp - amount);
+    // Apply armor reduction
+    const reduced = Math.max(1, Math.floor(amount * (1 - this.armorReduction)));
+    this.hp = Math.max(0, this.hp - reduced);
     this.invincible = true;
     this.setAlpha(0.5);
 
@@ -110,7 +145,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 
-  /** Returns true if player leveled up */
   addXp(amount: number): boolean {
     this.xp += amount;
     if (this.xp >= this.xpToNext) {
@@ -120,5 +154,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return true;
     }
     return false;
+  }
+
+  /** Apply a passive upgrade */
+  applyPassive(passiveId: string, level: number): void {
+    switch (passiveId) {
+      case 'armor': this.armorReduction = level * 0.05; break;
+      case 'haste': this.cooldownReduction = level * 0.05; break;
+      case 'luck': this.luckLevel = level; break;
+      case 'might': this.mightBonus = level * 0.10; break;
+      case 'recovery': this.recoveryLevel = level; break;
+    }
   }
 }

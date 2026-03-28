@@ -15,6 +15,7 @@ import {
 import { Player } from '../entities/Player';
 import { Projectile } from './Projectile';
 import { EnemyPool } from '../systems/EnemyPool';
+import { soundEngine } from '../systems/SoundEngine';
 
 
 export interface OwnedWeapon {
@@ -90,10 +91,12 @@ export class WeaponManager {
         continue;
       }
 
-      // Cooldown-based weapons
-      if (time - weapon.lastFired < stats.cooldown) continue;
+      // Cooldown-based weapons (apply haste passive)
+      const effectiveCooldown = stats.cooldown * (1 - this.player.cooldownReduction);
+      if (time - weapon.lastFired < effectiveCooldown) continue;
       weapon.lastFired = time;
 
+      soundEngine.weaponFire(type);
       switch (type) {
         case 'projectile': this.fireProjectile(weapon); break;
         case 'melee': this.fireMelee(weapon); break;
