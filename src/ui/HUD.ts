@@ -49,8 +49,7 @@ export class HUD {
 
     // Timer (center)
     this.timerText = this.scene.add.text(w / 2, 22, '15:00', {
-      fontSize: '16px', fontFamily: 'monospace', color: '#ffffff',
-      stroke: '#000000', strokeThickness: 3,
+      ...TEXT_STYLES.hudLabel, fontSize: '18px',
     }).setScrollFactor(0).setDepth(d + 2).setOrigin(0.5);
 
     // Kills (top right)
@@ -63,18 +62,17 @@ export class HUD {
 
     // Weapon icons (left side)
     this.weaponIcons = this.scene.add.text(10, 48, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#ffffff',
+      ...TEXT_STYLES.caption, color: '#ffffff',
     }).setScrollFactor(0).setDepth(d + 2);
 
     // Passive icons (below weapons)
-    this.passiveIcons = this.scene.add.text(10, 80, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#88bbff',
+    this.passiveIcons = this.scene.add.text(10, 78, '', {
+      ...TEXT_STYLES.caption, color: '#88ccff',
     }).setScrollFactor(0).setDepth(d + 2);
 
     // Evolution ready indicator
     this.evoIndicator = this.scene.add.text(w / 2, 40, '', {
-      fontSize: '12px', fontFamily: 'monospace', color: '#ffdd44',
-      stroke: '#000', strokeThickness: 2,
+      ...TEXT_STYLES.hudLabel, color: '#ffdd44',
     }).setScrollFactor(0).setDepth(d + 2).setOrigin(0.5);
   }
 

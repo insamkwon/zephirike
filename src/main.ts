@@ -23,7 +23,13 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  pixelArt: true,
+  // pixelArt only for sprites, not text — handled per-texture
+  pixelArt: false,
+  render: {
+    antialias: false,
+    pixelArt: false,
+    roundPixels: true,
+  },
 };
 
 new Phaser.Game(config);

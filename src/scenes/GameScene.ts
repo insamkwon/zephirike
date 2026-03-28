@@ -192,7 +192,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, bonuses);
 
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.cameras.main.startFollow(this.player, true, 1, 1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     this.damageOverlay = this.add.rectangle(

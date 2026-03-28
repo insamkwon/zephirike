@@ -189,9 +189,13 @@ export class WeaponManager {
     x: number, y: number, radius: number,
     damage: number, duration: number, color: number
   ): void {
-    const pool = this.scene.add.circle(x, y, radius, color, 0.3).setDepth(2);
-    let elapsed = 0;
+    // Filled circle + stroke ring for visibility
+    const pool = this.scene.add.circle(x, y, radius, color, 0.2).setDepth(2);
+    const ring = this.scene.add.circle(x, y, radius).setDepth(2);
+    ring.setStrokeStyle(2, color, 0.6);
+    ring.setFillStyle(0x000000, 0); // transparent fill
 
+    let elapsed = 0;
     const timer = this.scene.time.addEvent({
       delay: AREA_TICK_MS,
       repeat: Math.floor(duration / AREA_TICK_MS) - 1,
@@ -202,17 +206,24 @@ export class WeaponManager {
         for (const enemy of nearby) {
           enemy.takeDamage(dmg);
         }
-        pool.setAlpha(0.15 + 0.15 * Math.sin(elapsed * 0.01));
+        // Pulsing effect
+        const pulse = 0.15 + 0.1 * Math.sin(elapsed * 0.008);
+        pool.setAlpha(pulse);
+        ring.setAlpha(0.4 + 0.3 * Math.sin(elapsed * 0.008));
+        // Scale pulse for visual impact
+        const scalePulse = 1 + 0.05 * Math.sin(elapsed * 0.01);
+        pool.setScale(scalePulse);
+        ring.setScale(scalePulse);
       },
     });
 
     this.scene.time.delayedCall(duration, () => {
       timer.destroy();
       this.scene.tweens.add({
-        targets: pool,
+        targets: [pool, ring],
         alpha: 0,
         duration: AREA_FADE_MS,
-        onComplete: () => pool.destroy(),
+        onComplete: () => { pool.destroy(); ring.destroy(); },
       });
     });
   }
