@@ -1,8 +1,8 @@
 /** Game-wide constants */
 
 // -- Display --
-export const GAME_WIDTH = 800;
-export const GAME_HEIGHT = 600;
+export const GAME_WIDTH = 1280;
+export const GAME_HEIGHT = 720;
 
 // -- World --
 export const WORLD_WIDTH = 4000;
