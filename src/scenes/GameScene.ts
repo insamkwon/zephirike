@@ -19,6 +19,7 @@ import { WeaponDef } from '../config/weaponConfig';
 import { TEXT_STYLES } from '../config/styles';
 import { EVOLUTIONS } from '../config/evolutionConfig';
 import { unlockCharacter } from '../config/characterConfig';
+import { MapObjects } from '../systems/MapObjects';
 import {
   WORLD_WIDTH, WORLD_HEIGHT,
   GAME_DURATION_SECONDS,
@@ -54,6 +55,11 @@ export class GameScene extends Phaser.Scene {
   private inHitstop = false;
   private recentKills = 0;
   private recentKillTimer = 0;
+  private mapObjects!: MapObjects;
+  private dpsHistory: number[] = [];
+  private dpsSampleTimer = 0;
+  private dpsSampleKills = 0;
+  private totalDamageTaken = 0;
 
   // Passive tracking
   private ownedPassives = new Map<string, number>();
@@ -150,10 +156,17 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(elapsed, weaponStr, this.goldEarned, passiveStr, evoReady);
     this.checkKillStreak();
 
-    // Multi-kill shake tracker: reset after 500ms of no kills
+    // Multi-kill shake tracker
     this.recentKillTimer += delta;
-    if (this.recentKillTimer > 500) {
-      this.recentKills = 0;
+    if (this.recentKillTimer > 500) this.recentKills = 0;
+
+    // DPS tracking (sample every 30s)
+    this.dpsSampleTimer += delta;
+    if (this.dpsSampleTimer >= 30000) {
+      this.dpsSampleTimer -= 30000;
+      const killsDelta = this.player.kills - this.dpsSampleKills;
+      this.dpsSampleKills = this.player.kills;
+      this.dpsHistory.push(killsDelta);
     }
   }
 
@@ -187,6 +200,7 @@ export class GameScene extends Phaser.Scene {
     this.dropManager = new DropManager(this, this.player);
     this.hud = new HUD(this, this.player);
     this.minimap = new Minimap(this, this.player, this.enemyPool);
+    this.mapObjects = new MapObjects(this);
   }
 
   private setupCollisions(): void {
@@ -196,6 +210,7 @@ export class GameScene extends Phaser.Scene {
       (_p, obj) => {
         const enemy = obj as Enemy;
         if (!enemy.active) return;
+        this.totalDamageTaken += enemy.damage;
         this.player.takeDamage(enemy.damage);
         this.flashDamageOverlay();
         this.vfx.shake(0.003, 80);
@@ -222,6 +237,21 @@ export class GameScene extends Phaser.Scene {
         } else {
           soundEngine.hit();
         }
+      },
+      undefined, this
+    );
+
+    // Player and enemies collide with obstacles
+    this.physics.add.collider(this.player, this.mapObjects.obstacles);
+    this.physics.add.collider(this.enemyPool.group, this.mapObjects.obstacles);
+
+    // Projectiles break destructibles
+    this.physics.add.overlap(
+      this.weaponManager.projectiles, this.mapObjects.destructibles,
+      (pObj, dObj) => {
+        const proj = pObj as Projectile;
+        if (!proj.active) return;
+        this.mapObjects.hitDestructible(dObj as Phaser.GameObjects.GameObject, proj.damage);
       },
       undefined, this
     );
@@ -330,6 +360,12 @@ export class GameScene extends Phaser.Scene {
       if (this.gameOver) return;
       this.gameOver = true;
       this.endGame(false);
+    });
+
+    // Destructible drops
+    this.events.on('destructible-broken', (x: number, y: number) => {
+      this.dropManager.spawnXpGem(x, y, Phaser.Math.Between(3, 8));
+      this.vfx.deathBurst(x, y, 0xcc6622, 6);
     });
   }
 
@@ -595,6 +631,9 @@ export class GameScene extends Phaser.Scene {
       level: this.player.level,
       gold: this.goldEarned,
       weapons: this.weaponManager.weapons.map(w => `${w.def.icon} ${w.def.name} Lv.${w.level + 1}`),
+      dpsHistory: this.dpsHistory,
+      peakDps: this.dpsHistory.length > 0 ? Math.max(...this.dpsHistory) : 0,
+      damageTaken: this.totalDamageTaken,
     });
   }
 
