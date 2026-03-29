@@ -60,12 +60,12 @@ export const MAP_SPAWN_EXCLUSION = 300;
 export const TORCH_HP = 3;
 export const BONE_PROJECTILE_SPEED = 200;
 export const BONE_LIFETIME_MS = 2000;
-export const BONE_HIT_RADIUS = 20;
+export const BONE_HIT_RADIUS = 12;
 
 // -- Boss --
 export const BOSS_CHARGE_SPEED_MUL = 3;
 export const BOSS_CHARGE_DURATION = 600;
-export const BOSS_AOE_RADIUS = 150;
+export const BOSS_AOE_RADIUS = 120;
 export const BOSS_AOE_DAMAGE = 25;
 export const BOSS_SUMMON_COUNT = 5;
 export const BOSS_PHASE_INTERVAL = 4000;

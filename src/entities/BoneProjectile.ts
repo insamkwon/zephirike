@@ -9,12 +9,17 @@ const POOL_SIZE = 20;
 export class BoneProjectilePool {
   private scene: Phaser.Scene;
   private pool: Phaser.GameObjects.Rectangle[] = [];
+  private glows: Phaser.GameObjects.Rectangle[] = [];
   private velocities = new Map<Phaser.GameObjects.Rectangle, { vx: number; vy: number }>();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     for (let i = 0; i < POOL_SIZE; i++) {
-      const bone = scene.add.rectangle(-100, -100, 6, 6, 0xcccccc, 0).setDepth(8);
+      const glow = scene.add.rectangle(-100, -100, 20, 20, 0xffddaa, 0.3).setDepth(7);
+      glow.setActive(false).setVisible(false);
+      this.glows.push(glow);
+
+      const bone = scene.add.rectangle(-100, -100, 12, 12, 0xffeedd, 0).setDepth(8);
       bone.setActive(false).setVisible(false);
       this.pool.push(bone);
     }
@@ -27,6 +32,12 @@ export class BoneProjectilePool {
     const angle = Phaser.Math.Angle.Between(fromX, fromY, toX, toY);
     bone.setPosition(fromX, fromY).setActive(true).setVisible(true).setAlpha(1);
     bone.setData('damage', damage);
+
+    const idx = this.pool.indexOf(bone);
+    if (idx >= 0) {
+      const glow = this.glows[idx];
+      glow.setPosition(fromX, fromY).setActive(true).setVisible(true);
+    }
 
     this.velocities.set(bone, {
       vx: Math.cos(angle) * BONE_PROJECTILE_SPEED,
@@ -50,6 +61,13 @@ export class BoneProjectilePool {
       bone.y += vel.vy * dt;
       bone.rotation += 0.3;
 
+      const idx = this.pool.indexOf(bone);
+      if (idx >= 0) {
+        const glow = this.glows[idx];
+        glow.setPosition(bone.x, bone.y);
+        glow.rotation = bone.rotation;
+      }
+
       const dx = bone.x - playerX;
       const dy = bone.y - playerY;
       if (dx * dx + dy * dy < BONE_HIT_RADIUS * BONE_HIT_RADIUS) {
@@ -62,11 +80,18 @@ export class BoneProjectilePool {
   private release(bone: Phaser.GameObjects.Rectangle): void {
     bone.setActive(false).setVisible(false).setPosition(-100, -100);
     this.velocities.delete(bone);
+
+    const idx = this.pool.indexOf(bone);
+    if (idx >= 0) {
+      this.glows[idx].setActive(false).setVisible(false).setPosition(-100, -100);
+    }
   }
 
   destroy(): void {
     for (const bone of this.pool) bone.destroy();
+    for (const glow of this.glows) glow.destroy();
     this.pool = [];
+    this.glows = [];
     this.velocities.clear();
   }
 }

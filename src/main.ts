@@ -32,14 +32,14 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.RESIZE,
+    mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   pixelArt: false,
   render: {
     antialias: true,
     pixelArt: false,
-    roundPixels: true,
+    roundPixels: false,
   },
 };
 

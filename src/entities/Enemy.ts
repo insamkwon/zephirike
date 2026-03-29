@@ -60,7 +60,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(5);
     const body = this.body as Phaser.Physics.Arcade.Body;
     const spriteSize = Math.max(def.size * 4, 32);
-    const hitRadius = def.size * 1.5;
+    const hitRadius = def.size * 1.0;
     body.setCircle(hitRadius, spriteSize / 2 - hitRadius, spriteSize / 2 - hitRadius);
 
     this.aiTimer = Phaser.Math.Between(0, 2000);

@@ -159,7 +159,7 @@ export class MenuScene extends Phaser.Scene {
     this.createPillButton(cx + 110, btnY, 'UPGRADES', 0xFF9500, () => this.toggleShop(), 600);
 
     // Controls hint
-    const controls = this.add.text(cx, sy + 390, 'WASD/Arrows: Move   Auto-fire   M: Mute   ESC: Pause', {
+    const controls = this.add.text(cx, sy + 390, 'WASD / Arrows  \u00b7  Auto-fire  \u00b7  M Mute  \u00b7  ESC Pause', {
       fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
       color: '#708090',
     }).setOrigin(0.5).setAlpha(0);

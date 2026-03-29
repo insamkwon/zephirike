@@ -189,7 +189,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, bonuses);
 
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   }
@@ -216,7 +216,6 @@ export class GameScene extends Phaser.Scene {
         this.totalDamageTaken += enemy.damage;
         this.player.takeDamage(enemy.damage);
         this.vfx.flashDamage();
-        this.vfx.shake(0.003, 80);
         soundEngine.playerHit();
       },
       undefined, this
@@ -267,15 +266,17 @@ export class GameScene extends Phaser.Scene {
       this.bonePool.fire(enemy.x, enemy.y, px, py, enemy.damage);
     });
 
-    // Boss AoE stomp
+    // Boss AoE stomp — telegraph first, then damage after delay
     this.events.on('boss-aoe', (x: number, y: number, radius: number, damage: number) => {
       this.vfx.bossAoeRing(x, y, radius);
-      const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
-      if (dist < radius) {
-        this.player.takeDamage(damage);
-        this.vfx.flashDamage();
-        this.vfx.shake(0.008, 200);
-      }
+      this.time.delayedCall(400, () => {
+        if (this.gameOver) return;
+        const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
+        if (dist < radius) {
+          this.player.takeDamage(damage);
+          this.vfx.flashDamage();
+        }
+      });
     });
 
     // Boss summon minions
@@ -293,17 +294,12 @@ export class GameScene extends Phaser.Scene {
     this.events.on('enemy-killed', (enemy: Enemy) => {
       this.player.kills++;
 
-      // Multi-kill shake
       this.recentKills++;
       this.recentKillTimer = 0;
-      if (this.recentKills >= 5) {
-        this.vfx.shake(0.004 * Math.min(this.recentKills / 10, 1), 100);
-      }
 
       this.vfx.deathBurst(enemy.x, enemy.y, enemy.enemyDef.color, enemy.isElite ? 16 : 8);
       soundEngine.kill();
       if (enemy.enemyDef.isBoss) {
-        this.vfx.shake(0.015, 500);
         this.vfx.screenFlash(0xff4444, 0.3, 400);
       }
 

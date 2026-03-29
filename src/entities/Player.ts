@@ -94,8 +94,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     };
     this.arrows = kb.createCursorKeys();
 
-    // Create HP bar graphics (world-space, follows player)
+    // Create HP bar graphics — draw once at local coords, move via setPosition
     this.hpBarGfx = scene.add.graphics().setDepth(11);
+    this.redrawHpBar();
   }
 
   update(delta?: number): void {
@@ -112,13 +113,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       vy *= DIAGONAL_FACTOR;
     }
 
-    this.setVelocity(vx * this.speed, vy * this.speed);
+    // Smooth movement via velocity lerp (no jitter)
+    const targetVx = vx * this.speed;
+    const targetVy = vy * this.speed;
+    const dt = (delta ?? 16) / 1000;
+    const smoothing = 1 - Math.pow(0.0001, dt);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(
+      Phaser.Math.Linear(body.velocity.x, targetVx, smoothing),
+      Phaser.Math.Linear(body.velocity.y, targetVy, smoothing),
+    );
 
     if (vx !== 0) {
       this.lastMoveX = vx;
       this.facingRight = vx > 0;
       this.setFlipX(!this.facingRight);
     }
+
 
     // HP recovery passive with visual feedback
     if (this.recoveryLevel > 0 && delta) {
@@ -134,15 +145,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    // Update HP bar position and drawing
-    this.drawHpBar();
+    // Move HP bar with player (position only, no redraw)
+    this.hpBarGfx.setPosition(this.x, this.y);
   }
 
-  private drawHpBar(): void {
+  /** Redraw HP bar at local coordinates — only call when HP changes */
+  private redrawHpBar(): void {
     this.hpBarGfx.clear();
     const ratio = this.hp / this.maxHp;
-    const bx = this.x - HP_BAR_W / 2;
-    const by = this.y + HP_BAR_OFFSET_Y;
+    const bx = -HP_BAR_W / 2;
+    const by = HP_BAR_OFFSET_Y;
 
     // Background
     this.hpBarGfx.fillStyle(0x000000, 0.5);
@@ -174,6 +186,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const reduced = Math.max(1, Math.floor(amount * (1 - this.armorReduction)));
     this.hp = Math.max(0, this.hp - reduced);
     this.invincible = true;
+    this.redrawHpBar();
 
     // Damage flash — red tint
     this.setTint(0xff0000);
@@ -208,6 +221,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   heal(amount: number): void {
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + amount);
+    if (this.hp !== before) this.redrawHpBar();
     if (this.hp > before) {
       this.setTint(0x44ff44);
       this.scene.time.delayedCall(120, () => {
