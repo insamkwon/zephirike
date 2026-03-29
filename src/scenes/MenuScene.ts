@@ -2,15 +2,18 @@ import Phaser from 'phaser';
 import { CHARACTERS, getUnlockedCharacters, CharacterDef } from '../config/characterConfig';
 import { META_UPGRADES, getGold, setGold, getUpgradeLevel, setUpgradeLevel } from '../config/metaConfig';
 import { soundEngine } from '../systems/SoundEngine';
-import { TEXT_STYLES } from '../config/styles';
+import { TEXT_STYLES, UI_COLORS, FONT_FAMILY } from '../config/styles';
+import { drawGradientCard, drawCardBorder, drawGlassPanel, drawPillButton, addPanelBlur, removePanelBlur } from '../ui/UIHelpers';
 
 export class MenuScene extends Phaser.Scene {
   private selectedChar = 0;
   private charCards: Phaser.GameObjects.Container[] = [];
   private shopMode = false;
   private shopElements: Phaser.GameObjects.GameObject[] = [];
+  private shopBlur: Phaser.FX.Blur | null = null;
   private unlocked!: Set<string>;
   private availableChars: CharacterDef[] = [];
+  private bgParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
   constructor() {
     super({ key: 'MenuScene' });
@@ -18,91 +21,160 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     soundEngine.init();
-    const cx = this.cameras.main.width / 2;
-    this.cameras.main.setBackgroundColor('#0a0a1a');
+    const cam = this.cameras.main;
+    const cx = cam.width / 2;
+    const h = cam.height;
+
+    // Bright gradient-simulated background
+    cam.setBackgroundColor('#1a3a2a');
+
+    // Subtle vignette for depth
+    try { cam.postFX.addVignette(0.5, 0.5, 0.88, 0.2); } catch {}
 
     this.unlocked = getUnlockedCharacters();
     this.availableChars = CHARACTERS.filter(c => this.unlocked.has(c.id));
 
-    // Title
-    this.add.text(cx, 50, 'ZEPHIRIKE', TEXT_STYLES.title).setOrigin(0.5);
-    this.add.text(cx, 90, `Gold: ${getGold()}`, {
-      ...TEXT_STYLES.hudLabel, color: '#ffdd44',
-    }).setOrigin(0.5);
+    const sy = Math.max(30, (h - 440) / 2);
 
-    // Character selection
-    this.add.text(cx, 120, 'Choose Character', {
-      ...TEXT_STYLES.body, color: '#ffdd44',
-    }).setOrigin(0.5);
+    this.createBgParticles();
 
-    const cardWidth = 160;
-    const gap = 15;
+    // Title — big, bold, white with glow
+    const title = this.add.text(cx, sy, 'ZEPHIRIKE', {
+      ...TEXT_STYLES.title, fontSize: '52px',
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({
+      targets: title, alpha: 1, y: { from: sy - 25, to: sy },
+      duration: 500, ease: 'Cubic.easeOut',
+    });
+    try { title.preFX?.addGlow(0xFFD700, 3, 0, false, 0.06, 10); } catch {}
+
+    // Gold display — pill badge
+    const goldY = sy + 55;
+    const goldBg = this.add.graphics();
+    goldBg.fillStyle(0x000000, 0.3);
+    goldBg.fillRoundedRect(cx - 60, goldY - 14, 120, 28, 14);
+    goldBg.setAlpha(0);
+    this.tweens.add({ targets: goldBg, alpha: 1, duration: 400, delay: 200 });
+
+    const goldText = this.add.text(cx, goldY, `\uD83E\uDE99 ${getGold()}`, {
+      fontSize: '16px', fontFamily: FONT_FAMILY, fontStyle: '700',
+      color: '#FFD700',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: goldText, alpha: 1, duration: 400, delay: 200 });
+
+    // Character header
+    const charHeader = this.add.text(cx, sy + 90, 'Choose Character', {
+      fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '600',
+      color: '#b0c4de',
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: charHeader, alpha: 1, duration: 400, delay: 250 });
+
+    // Character cards — bright with colored borders
+    const cardWidth = 190;
+    const cardHeight = 160;
+    const gap = 24;
     const total = this.availableChars.length;
     const totalW = total * cardWidth + (total - 1) * gap;
-    const startX = (this.cameras.main.width - totalW) / 2 + cardWidth / 2;
+    const startX = (cam.width - totalW) / 2 + cardWidth / 2;
+    const cardsY = sy + 190;
 
     this.charCards = [];
     for (let i = 0; i < total; i++) {
       const ch = this.availableChars[i];
-      const container = this.add.container(startX + i * (cardWidth + gap), 220);
+      const container = this.add.container(startX + i * (cardWidth + gap), cardsY);
 
-      const bg = this.add.rectangle(0, 0, cardWidth, 130, 0x222244, 0.8);
-      bg.setStrokeStyle(2, i === 0 ? 0xffdd44 : 0x444466);
+      const cardGfx = this.add.graphics();
+      drawGradientCard(cardGfx, 0, 0, cardWidth, cardHeight, 14, 0x1e3028);
+      const borderColor = i === 0 ? UI_COLORS.borderGold : UI_COLORS.borderSubtle;
+      drawCardBorder(cardGfx, 0, 0, cardWidth, cardHeight, 14, borderColor, i === 0 ? 2.5 : 1.5);
 
-      const icon = this.add.text(0, -40, ch.icon, { fontSize: '28px' }).setOrigin(0.5);
+      const icon = this.add.text(0, -48, ch.icon, { fontSize: '36px' }).setOrigin(0.5);
       const name = this.add.text(0, -10, ch.name, {
-        ...TEXT_STYLES.body, fontSize: '14px',
+        fontSize: '17px', fontFamily: FONT_FAMILY, fontStyle: '700',
+        color: '#ffffff',
+        stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
-      const desc = this.add.text(0, 15, ch.description, {
-        ...TEXT_STYLES.caption, fontSize: '9px',
-        wordWrap: { width: 140 }, align: 'center',
+      const desc = this.add.text(0, 16, ch.description, {
+        fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
+        color: '#b0c4de',
+        wordWrap: { width: 165 }, align: 'center',
       }).setOrigin(0.5);
 
-      // Stats hint
       const stats: string[] = [];
       if (ch.hpMul !== 1) stats.push(`HP:${ch.hpMul > 1 ? '+' : ''}${Math.round((ch.hpMul - 1) * 100)}%`);
       if (ch.damageMul !== 1) stats.push(`DMG:${ch.damageMul > 1 ? '+' : ''}${Math.round((ch.damageMul - 1) * 100)}%`);
       if (ch.speedMul !== 1) stats.push(`SPD:${ch.speedMul > 1 ? '+' : ''}${Math.round((ch.speedMul - 1) * 100)}%`);
 
-      const statText = this.add.text(0, 42, stats.join(' '), {
-        fontSize: '8px', fontFamily: 'monospace', color: '#88aaff',
+      const statText = this.add.text(0, 50, stats.join(' '), {
+        fontSize: '11px', fontFamily: FONT_FAMILY, fontStyle: '700',
+        color: '#4FC3F7',
+        stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
 
-      container.add([bg, icon, name, desc, statText]);
-      container.setSize(cardWidth, 130).setInteractive();
-      container.on('pointerover', () => this.selectChar(i));
+      container.add([cardGfx, icon, name, desc, statText]);
+      container.setSize(cardWidth, cardHeight).setInteractive({ useHandCursor: true });
+
+      container.on('pointerover', () => {
+        this.selectChar(i);
+        this.tweens.add({
+          targets: container, scale: 1.05, y: cardsY - 4,
+          duration: 120, ease: 'Cubic.easeOut',
+        });
+      });
+      container.on('pointerout', () => {
+        this.tweens.add({
+          targets: container, scale: 1, y: cardsY,
+          duration: 120, ease: 'Cubic.easeOut',
+        });
+      });
       container.on('pointerdown', () => this.startGame());
+
+      container.setScale(0.8).setAlpha(0);
+      this.tweens.add({
+        targets: container, scale: 1, alpha: 1,
+        duration: 350, delay: 300 + i * 70, ease: 'Back.easeOut',
+      });
+
       this.charCards.push(container);
     }
 
-    // Locked characters preview
+    // Locked characters
     const lockedChars = CHARACTERS.filter(c => !this.unlocked.has(c.id));
     if (lockedChars.length > 0) {
-      let lockY = 310;
+      let lockY = cardsY + 105;
       for (const lc of lockedChars) {
-        this.add.text(cx, lockY, `${lc.icon} ${lc.name} — ${lc.unlockCondition}`, {
-          ...TEXT_STYLES.caption, color: '#555555',
-        }).setOrigin(0.5);
-        lockY += 18;
+        const lockText = this.add.text(cx, lockY, `\uD83D\uDD12 ${lc.name} — ${lc.unlockCondition}`, {
+          fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
+          color: '#708090',
+        }).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: lockText, alpha: 0.7, duration: 300, delay: 500 });
+        lockY += 24;
       }
     }
 
-    // Buttons
-    this.createButton(cx - 100, 380, 'START', '#44ff44', () => this.startGame());
-    this.createButton(cx + 100, 380, 'UPGRADES', '#44ddff', () => this.toggleShop());
+    // Pill buttons — bright, colorful
+    const btnY = sy + 345;
+    this.createPillButton(cx - 110, btnY, 'START', 0x44BB44, () => this.startGame(), 550);
+    this.createPillButton(cx + 110, btnY, 'UPGRADES', 0xFF9500, () => this.toggleShop(), 600);
 
-    // Controls
-    this.add.text(cx, 420, 'WASD/Arrows: Move | Auto-fire | M: Mute | ESC: Pause', {
-      fontSize: '10px', fontFamily: 'monospace', color: '#444444',
-    }).setOrigin(0.5);
+    // Controls hint
+    const controls = this.add.text(cx, sy + 390, 'WASD/Arrows: Move   Auto-fire   M: Mute   ESC: Pause', {
+      fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
+      color: '#708090',
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: controls, alpha: 1, duration: 300, delay: 650 });
 
-    // High score
+    // Best score
     const bestTime = localStorage.getItem('zephirike_best_time');
     const bestKills = localStorage.getItem('zephirike_best_kills');
     if (bestTime) {
-      this.add.text(cx, 445, `Best: ${bestTime} | Kills: ${bestKills ?? '0'}`, {
-        ...TEXT_STYLES.caption, color: '#444444',
-      }).setOrigin(0.5);
+      const best = this.add.text(cx, sy + 415, `Best: ${bestTime}  Kills: ${bestKills ?? '0'}`, {
+        fontSize: '13px', fontFamily: FONT_FAMILY, fontStyle: '600',
+        color: '#FFD700',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: best, alpha: 0.8, duration: 300, delay: 700 });
     }
 
     // Keyboard
@@ -116,80 +188,173 @@ export class MenuScene extends Phaser.Scene {
     kb.on('keydown-U', () => this.toggleShop());
   }
 
-  private createButton(x: number, y: number, label: string, color: string, onClick: () => void): void {
-    const btn = this.add.text(x, y, `[ ${label} ]`, {
-      ...TEXT_STYLES.body, color,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => btn.setScale(1.1));
-    btn.on('pointerout', () => btn.setScale(1));
-    btn.on('pointerdown', onClick);
+  private createBgParticles(): void {
+    if (!this.textures.exists('soft_glow')) return;
+    try {
+      this.bgParticles = this.add.particles(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2,
+        'soft_glow',
+        {
+          x: { min: 0, max: this.cameras.main.width },
+          y: { min: 0, max: this.cameras.main.height },
+          speed: { min: 8, max: 25 },
+          scale: { min: 0.1, max: 0.35 },
+          alpha: { start: 0.15, end: 0 },
+          lifespan: { min: 3000, max: 6000 },
+          tint: [0x44aa66, 0x66cc88, 0xFFD700],
+          blendMode: Phaser.BlendModes.ADD,
+          frequency: 250,
+          maxAliveParticles: 25,
+        },
+      );
+      this.bgParticles.setDepth(-1);
+    } catch { /* no particles */ }
+  }
+
+  private createPillButton(
+    x: number, y: number, label: string, color: number, onClick: () => void, delay = 0,
+  ): void {
+    const pillW = 140;
+    const pillH = 42;
+
+    const bg = this.add.graphics();
+    drawPillButton(bg, x, y, pillW, pillH, color, 0.9);
+    bg.setAlpha(0);
+    this.tweens.add({ targets: bg, alpha: 1, duration: 300, delay });
+
+    const btn = this.add.text(x, y, label, {
+      fontSize: '16px', fontFamily: FONT_FAMILY, fontStyle: '800',
+      color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setAlpha(0);
+    this.tweens.add({ targets: btn, alpha: 1, duration: 300, delay });
+
+    btn.on('pointerover', () => {
+      this.tweens.add({ targets: [btn, bg], scale: 1.08, duration: 100, ease: 'Cubic.easeOut' });
+    });
+    btn.on('pointerout', () => {
+      this.tweens.add({ targets: [btn, bg], scale: 1, duration: 100, ease: 'Cubic.easeOut' });
+    });
+    btn.on('pointerdown', () => {
+      this.tweens.add({
+        targets: btn, scale: 0.92, duration: 50, yoyo: true,
+        onComplete: onClick,
+      });
+    });
   }
 
   private selectChar(index: number): void {
     this.selectedChar = index;
     this.charCards.forEach((card, i) => {
-      const bg = card.getAt(0) as Phaser.GameObjects.Rectangle;
-      bg.setStrokeStyle(2, i === index ? 0xffdd44 : 0x444466);
+      const cardGfx = card.getAt(0) as Phaser.GameObjects.Graphics;
+      const cw = 190;
+      const ch = 160;
+      cardGfx.clear();
+      drawGradientCard(cardGfx, 0, 0, cw, ch, 14, 0x1e3028);
+      const color = i === index ? UI_COLORS.borderGold : UI_COLORS.borderSubtle;
+      drawCardBorder(cardGfx, 0, 0, cw, ch, 14, color, i === index ? 2.5 : 1.5);
     });
   }
 
   private startGame(): void {
     if (this.shopMode) return;
     const ch = this.availableChars[this.selectedChar];
-    this.scene.start('GameScene', { character: ch });
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('GameScene', { character: ch });
+    });
   }
 
   private toggleShop(): void {
     if (this.shopMode) {
+      removePanelBlur(this, this.shopBlur);
+      this.shopBlur = null;
       this.shopElements.forEach(e => e.destroy());
       this.shopElements = [];
       this.shopMode = false;
       return;
     }
     this.shopMode = true;
+    this.shopBlur = addPanelBlur(this);
     const cam = this.cameras.main;
 
-    const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.85).setDepth(50);
+    const overlay = this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0)
+      .setDepth(50);
+    this.tweens.add({ targets: overlay, fillAlpha: 0.7, duration: 200 });
     this.shopElements.push(overlay);
 
-    this.shopElements.push(this.add.text(cam.width / 2, 40, 'PERMANENT UPGRADES', {
-      ...TEXT_STYLES.heading, fontSize: '20px',
-    }).setDepth(51).setOrigin(0.5));
+    const panelW = 520;
+    const panelH = Math.min(cam.height - 60, META_UPGRADES.length * 65 + 120);
+    const shopPanel = this.add.graphics().setDepth(50);
+    drawGlassPanel(shopPanel, cam.width / 2, cam.height / 2, panelW, panelH, 18, 0.85);
+    this.shopElements.push(shopPanel);
 
-    this.shopElements.push(this.add.text(cam.width / 2, 65, `Gold: ${getGold()}`, {
-      ...TEXT_STYLES.hudLabel, color: '#ffdd44',
-    }).setDepth(51).setOrigin(0.5));
+    const shopTitle = this.add.text(cam.width / 2, cam.height / 2 - panelH / 2 + 30, 'PERMANENT UPGRADES', {
+      ...TEXT_STYLES.heading, fontSize: '22px',
+    }).setDepth(51).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: shopTitle, alpha: 1, duration: 200 });
+    this.shopElements.push(shopTitle);
 
+    const goldDisplay = this.add.text(cam.width / 2, cam.height / 2 - panelH / 2 + 58, `\uD83E\uDE99 ${getGold()}`, {
+      fontSize: '16px', fontFamily: FONT_FAMILY, fontStyle: '700',
+      color: '#FFD700',
+      stroke: '#000000', strokeThickness: 3,
+    }).setDepth(51).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: goldDisplay, alpha: 1, duration: 200, delay: 50 });
+    this.shopElements.push(goldDisplay);
+
+    const rowStartY = cam.height / 2 - panelH / 2 + 100;
     META_UPGRADES.forEach((upgrade, i) => {
-      const y = 100 + i * 65;
+      const y = rowStartY + i * 60;
       const currentLevel = getUpgradeLevel(upgrade.id);
       const maxed = currentLevel >= upgrade.maxLevel;
       const cost = maxed ? 0 : upgrade.costPerLevel[currentLevel];
 
       const row = this.add.container(cam.width / 2, y).setDepth(52);
-      const bg = this.add.rectangle(0, 0, 500, 50, 0x222244, 0.9);
-      const icon = this.add.text(-220, 0, `${upgrade.icon} ${upgrade.name}`, {
-        ...TEXT_STYLES.body, fontSize: '13px',
+
+      const rowBg = this.add.graphics();
+      rowBg.fillStyle(0x1e3028, 0.7);
+      rowBg.fillRoundedRect(-240, -22, 480, 44, 10);
+      rowBg.lineStyle(1, UI_COLORS.borderSubtle, 0.3);
+      rowBg.strokeRoundedRect(-240, -22, 480, 44, 10);
+
+      const iconText = this.add.text(-210, 0, `${upgrade.icon} ${upgrade.name}`, {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '600',
+        color: '#ffffff',
       }).setOrigin(0, 0.5);
 
-      const levelStr = '\u25A0'.repeat(currentLevel) + '\u25A1'.repeat(upgrade.maxLevel - currentLevel);
-      const levelText = this.add.text(0, 0, levelStr, {
-        fontSize: '13px', fontFamily: 'monospace', color: '#44ddff',
+      const pipsText = '\u25CF'.repeat(currentLevel) + '\u25CB'.repeat(upgrade.maxLevel - currentLevel);
+      const levelText = this.add.text(10, 0, pipsText, {
+        fontSize: '13px', fontFamily: FONT_FAMILY, color: '#4FC3F7',
       }).setOrigin(0.5);
 
-      const costStr = maxed ? 'MAXED' : `${cost}g`;
-      const costColor = maxed ? '#44ff44' : (getGold() >= cost ? '#ffdd44' : '#ff4444');
-      const costText = this.add.text(180, 0, costStr, {
-        fontSize: '13px', fontFamily: 'monospace', color: costColor,
+      const costStr = maxed ? 'MAX' : `${cost}g`;
+      const costColor = maxed ? '#66DD66' : (getGold() >= cost ? '#FFD700' : '#FF4444');
+      const costText = this.add.text(190, 0, costStr, {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '700', color: costColor,
+        stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
 
-      row.add([bg, icon, levelText, costText]);
-      row.setSize(500, 50);
+      row.add([rowBg, iconText, levelText, costText]);
+      row.setSize(480, 44);
 
       if (!maxed && getGold() >= cost) {
         row.setInteractive({ useHandCursor: true });
-        row.on('pointerover', () => bg.setFillStyle(0x333366));
-        row.on('pointerout', () => bg.setFillStyle(0x222244));
+        row.on('pointerover', () => {
+          rowBg.clear();
+          rowBg.fillStyle(0x2a4a38, 0.8);
+          rowBg.fillRoundedRect(-240, -22, 480, 44, 10);
+          rowBg.lineStyle(2, UI_COLORS.borderGold, 0.5);
+          rowBg.strokeRoundedRect(-240, -22, 480, 44, 10);
+        });
+        row.on('pointerout', () => {
+          rowBg.clear();
+          rowBg.fillStyle(0x1e3028, 0.7);
+          rowBg.fillRoundedRect(-240, -22, 480, 44, 10);
+          rowBg.lineStyle(1, UI_COLORS.borderSubtle, 0.3);
+          rowBg.strokeRoundedRect(-240, -22, 480, 44, 10);
+        });
         row.on('pointerdown', () => {
           setGold(getGold() - cost);
           setUpgradeLevel(upgrade.id, currentLevel + 1);
@@ -198,11 +363,17 @@ export class MenuScene extends Phaser.Scene {
           this.toggleShop();
         });
       }
+
+      row.setAlpha(0);
+      this.tweens.add({ targets: row, alpha: 1, duration: 200, delay: 100 + i * 40 });
       this.shopElements.push(row);
     });
 
-    this.shopElements.push(this.add.text(cam.width / 2, cam.height - 35, 'Press U or ENTER to close', {
-      ...TEXT_STYLES.caption, color: '#555555',
-    }).setDepth(51).setOrigin(0.5));
+    const closeHint = this.add.text(cam.width / 2, cam.height / 2 + panelH / 2 - 25, 'Press U or ENTER to close', {
+      fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
+      color: '#708090',
+    }).setDepth(51).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: closeHint, alpha: 0.7, duration: 200, delay: 400 });
+    this.shopElements.push(closeHint);
   }
 }

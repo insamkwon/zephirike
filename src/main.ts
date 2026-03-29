@@ -6,7 +6,7 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config/constants';
 
 /* ── High-DPI text: patch Phaser text factory so ALL text gets crisp resolution ── */
-const TEXT_DPR = Math.min(window.devicePixelRatio || 1, 2);
+const TEXT_DPR = Math.min(window.devicePixelRatio || 1, 3);
 const _origText = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function (
   this: Phaser.GameObjects.GameObjectFactory,
@@ -22,7 +22,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   parent: 'game-container',
-  backgroundColor: '#0a0a1a',
+  backgroundColor: '#1a2a1a',
   scene: [BootScene, MenuScene, GameScene, GameOverScene],
   physics: {
     default: 'arcade',
@@ -32,7 +32,7 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   pixelArt: false,
@@ -43,4 +43,6 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
-new Phaser.Game(config);
+document.fonts.ready.then(() => {
+  new Phaser.Game(config);
+});

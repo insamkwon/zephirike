@@ -16,7 +16,7 @@ import { bgm } from '../systems/BGM';
 import { addGold, getMetaBonuses } from '../config/metaConfig';
 import { PASSIVES } from '../config/passiveConfig';
 import { WeaponDef } from '../config/weaponConfig';
-import { TEXT_STYLES } from '../config/styles';
+import { TEXT_STYLES, FONT_FAMILY } from '../config/styles';
 import { EVOLUTIONS } from '../config/evolutionConfig';
 import { unlockCharacter } from '../config/characterConfig';
 import { MapObjects } from '../systems/MapObjects';
@@ -189,7 +189,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, bonuses);
 
-    this.cameras.main.startFollow(this.player, true, 1, 1);
+    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   }
@@ -269,6 +269,7 @@ export class GameScene extends Phaser.Scene {
 
     // Boss AoE stomp
     this.events.on('boss-aoe', (x: number, y: number, radius: number, damage: number) => {
+      this.vfx.bossAoeRing(x, y, radius);
       const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
       if (dist < radius) {
         this.player.takeDamage(damage);
@@ -348,12 +349,14 @@ export class GameScene extends Phaser.Scene {
         case 'health':
           this.player.heal(drop.value);
           soundEngine.healthPickup();
-          this.vfx.pickupSparkle(drop.x, drop.y);
+          this.vfx.healSparkle(drop.x, drop.y);
+          this.vfx.healNumber(drop.x, drop.y, drop.value);
           break;
         case 'gold':
           this.goldEarned += drop.value;
           addGold(drop.value);
           soundEngine.goldPickup();
+          this.vfx.goldSparkle(drop.x, drop.y);
           break;
         case 'chest':
           this.openChest();
@@ -466,17 +469,20 @@ export class GameScene extends Phaser.Scene {
     elements.push(this.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.8)
       .setScrollFactor(0).setDepth(300));
     elements.push(this.add.text(cam.width / 2, 100, 'WEAPON EVOLUTION!', {
-      ...TEXT_STYLES.heading, fontSize: '32px',
+      ...TEXT_STYLES.heading, fontSize: '36px', color: '#FFD700',
+      stroke: '#000000', strokeThickness: 5,
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
     elements.push(this.add.text(cam.width / 2, 160, `${evo.resultDef.icon} ${evo.resultDef.name}`, {
-      fontSize: '24px', fontFamily: 'monospace', color: '#ffffff',
+      fontSize: '26px', fontFamily: FONT_FAMILY, fontStyle: '700', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
     elements.push(this.add.text(cam.width / 2, 200, evo.resultDef.levels[0].description, {
-      fontSize: '14px', fontFamily: 'monospace', color: '#aaaaaa',
+      fontSize: '15px', fontFamily: FONT_FAMILY, fontStyle: '500', color: '#b0c4de',
       wordWrap: { width: 400 }, align: 'center',
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
     elements.push(this.add.text(cam.width / 2, 280, 'Press any key to continue', {
-      fontSize: '16px', fontFamily: 'monospace', color: '#44ff44',
+      fontSize: '16px', fontFamily: FONT_FAMILY, fontStyle: '700', color: '#66DD66',
+      stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(301).setOrigin(0.5));
 
     const handler = () => {
@@ -504,8 +510,8 @@ export class GameScene extends Phaser.Scene {
         : 'Weapon upgraded!';
 
       const text = this.add.text(cam.width / 2, cam.height * 0.4, msg, {
-        fontSize: '18px', fontFamily: 'monospace', color: '#ffdd44',
-        stroke: '#000', strokeThickness: 3,
+        fontSize: '20px', fontFamily: FONT_FAMILY, fontStyle: '700', color: '#FFD700',
+        stroke: '#000000', strokeThickness: 4,
       }).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
 
       this.tweens.add({
@@ -537,16 +543,8 @@ export class GameScene extends Phaser.Scene {
       if (elapsed >= t && this.lastWaveTime < t) {
         this.lastWaveTime = t;
         soundEngine.waveTransition();
-        const cam = this.cameras.main;
         const waveNum = waveTimes.indexOf(t) + 2;
-        const text = this.add.text(cam.width / 2, cam.height * 0.25, `Wave ${waveNum}`,
-          TEXT_STYLES.announcement
-        ).setScrollFactor(0).setDepth(300).setOrigin(0.5).setAlpha(0);
-        this.tweens.add({
-          targets: text, alpha: 1, scale: { from: 0.5, to: 1 },
-          duration: 400, hold: 800, yoyo: true,
-          onComplete: () => text.destroy(),
-        });
+        this.vfx.waveAnnouncement(waveNum);
       }
     }
   }
@@ -587,19 +585,49 @@ export class GameScene extends Phaser.Scene {
     if (this.paused) {
       this.physics.pause();
       bgm.stop();
-      this.add.text(
-        this.cameras.main.width / 2, this.cameras.main.height / 2,
-        'PAUSED\n\nESC/P resume | M mute',
-        {
-          fontSize: '22px', fontFamily: 'monospace', color: '#ffffff',
-          align: 'center', stroke: '#000', strokeThickness: 3,
-        }
-      ).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseText');
+
+      const cam = this.cameras.main;
+
+      // Dim overlay
+      const overlay = this.add.rectangle(
+        cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0.6
+      ).setScrollFactor(0).setDepth(399).setName('pauseOverlay');
+
+      // Title
+      const title = this.add.text(cam.width / 2, cam.height * 0.35, 'PAUSED', {
+        fontSize: '40px', fontFamily: FONT_FAMILY, fontStyle: '800', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 5,
+      }).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseTitle').setAlpha(0);
+
+      // Controls hint
+      const hint = this.add.text(cam.width / 2, cam.height * 0.45, 'ESC / P  resume    M  mute', {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '500', color: '#708090',
+      }).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseHint').setAlpha(0);
+
+      // Stats summary
+      const elapsed = Math.floor(this.gameTimer);
+      const statsText = [
+        `Time: ${this.formatTime(elapsed)}`,
+        `Kills: ${this.player.kills}`,
+        `Level: ${this.player.level}`,
+        `Gold: ${this.goldEarned}`,
+      ].join('   ');
+      const stats = this.add.text(cam.width / 2, cam.height * 0.55, statsText, {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '600', color: '#b0c4de',
+      }).setScrollFactor(0).setDepth(400).setOrigin(0.5).setName('pauseStats').setAlpha(0);
+
+      // Animate in
+      this.tweens.add({ targets: overlay, alpha: { from: 0, to: 0.6 }, duration: 150 });
+      this.tweens.add({ targets: title, alpha: 1, y: cam.height * 0.33, duration: 200, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: hint, alpha: 1, duration: 250, delay: 100 });
+      this.tweens.add({ targets: stats, alpha: 1, duration: 250, delay: 150 });
     } else {
       this.physics.resume();
       this.startBGM();
-      const pt = this.children.getByName('pauseText');
-      if (pt) pt.destroy();
+      for (const name of ['pauseOverlay', 'pauseTitle', 'pauseHint', 'pauseStats']) {
+        const el = this.children.getByName(name);
+        if (el) el.destroy();
+      }
     }
   }
 

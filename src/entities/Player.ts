@@ -18,6 +18,11 @@ export interface PlayerBonuses {
   magnetMul: number;
 }
 
+const HP_BAR_W = 40;
+const HP_BAR_H = 5;
+const HP_BAR_OFFSET_Y = 20;
+const HP_BAR_RADIUS = 2;
+
 export class Player extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   maxHp: number;
@@ -47,6 +52,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     right: Phaser.Input.Keyboard.Key;
   };
   private arrows: Phaser.Types.Input.Keyboard.CursorKeys;
+  private invincBlink: Phaser.Tweens.Tween | null = null;
+
+  /** HP bar graphics — follows player in world space */
+  private hpBarGfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, x: number, y: number, bonuses?: PlayerBonuses) {
     super(scene, x, y, 'player');
@@ -56,20 +65,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(10);
     this.setCollideWorldBounds(true);
 
-    // Subtle idle bob animation
-    scene.tweens.add({
-      targets: this,
-      y: y - 2,
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-
     // Player glow (preFX)
     try {
-      this.preFX?.addGlow(0x4488ff, 2, 0, false, 0.1, 10);
-    } catch { /* Canvas renderer fallback — no preFX */ }
+      this.preFX?.addGlow(0x44aaff, 2, 0, false, 0.1, 10);
+    } catch { /* Canvas renderer fallback */ }
 
     const b = bonuses ?? { bonusHp: 0, speedMul: 1, damageMul: 1, xpMul: 1, magnetMul: 1 };
     this.maxHp = PLAYER_MAX_HP + b.bonusHp;
@@ -94,6 +93,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
     this.arrows = kb.createCursorKeys();
+
+    // Create HP bar graphics (world-space, follows player)
+    this.hpBarGfx = scene.add.graphics().setDepth(11);
   }
 
   update(delta?: number): void {
@@ -118,15 +120,47 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.setFlipX(!this.facingRight);
     }
 
-    // HP recovery passive
+    // HP recovery passive with visual feedback
     if (this.recoveryLevel > 0 && delta) {
       this.recoveryTimer += delta;
       const interval = this.recoveryLevel >= 2 ? 3000 : 5000;
       const amount = this.recoveryLevel >= 3 ? 2 : 1;
       if (this.recoveryTimer >= interval) {
         this.recoveryTimer -= interval;
-        this.heal(amount);
+        if (this.hp < this.maxHp) {
+          this.heal(amount);
+          this.scene.events.emit('player-heal', this.x, this.y, amount);
+        }
       }
+    }
+
+    // Update HP bar position and drawing
+    this.drawHpBar();
+  }
+
+  private drawHpBar(): void {
+    this.hpBarGfx.clear();
+    const ratio = this.hp / this.maxHp;
+    const bx = this.x - HP_BAR_W / 2;
+    const by = this.y + HP_BAR_OFFSET_Y;
+
+    // Background
+    this.hpBarGfx.fillStyle(0x000000, 0.5);
+    this.hpBarGfx.fillRoundedRect(bx, by, HP_BAR_W, HP_BAR_H, HP_BAR_RADIUS);
+
+    // Fill color based on HP ratio
+    let color: number;
+    if (ratio > 0.5) color = 0x44DD44;
+    else if (ratio > 0.25) color = 0xFFAA00;
+    else color = 0xFF3333;
+
+    const fillW = Math.max(ratio * HP_BAR_W, ratio > 0 ? HP_BAR_RADIUS * 2 : 0);
+    if (fillW > 0) {
+      this.hpBarGfx.fillStyle(color, 1);
+      this.hpBarGfx.fillRoundedRect(bx, by, fillW, HP_BAR_H, HP_BAR_RADIUS);
+      // Shine
+      this.hpBarGfx.fillStyle(0xffffff, 0.3);
+      this.hpBarGfx.fillRoundedRect(bx + 1, by + 1, fillW - 2, 2, 1);
     }
   }
 
@@ -137,19 +171,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): void {
     if (this.invincible || this.hp <= 0) return;
 
-    // Apply armor reduction
     const reduced = Math.max(1, Math.floor(amount * (1 - this.armorReduction)));
     this.hp = Math.max(0, this.hp - reduced);
     this.invincible = true;
-    this.setAlpha(0.5);
 
+    // Damage flash — red tint
     this.setTint(0xff0000);
     this.scene.time.delayedCall(DAMAGE_FLASH_DURATION, () => {
-      this.clearTint();
+      if (this.active) this.clearTint();
+    });
+
+    // Invincibility blink
+    if (this.invincBlink) this.invincBlink.stop();
+    this.invincBlink = this.scene.tweens.add({
+      targets: this,
+      alpha: { from: 0.3, to: 0.9 },
+      yoyo: true,
+      repeat: -1,
+      duration: 80,
     });
 
     this.scene.time.delayedCall(PLAYER_INVINCIBILITY_MS, () => {
       this.invincible = false;
+      if (this.invincBlink) {
+        this.invincBlink.stop();
+        this.invincBlink = null;
+      }
       this.setAlpha(1);
     });
 
@@ -159,7 +206,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   heal(amount: number): void {
+    const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + amount);
+    if (this.hp > before) {
+      this.setTint(0x44ff44);
+      this.scene.time.delayedCall(120, () => {
+        if (this.active) this.clearTint();
+      });
+    }
   }
 
   addXp(amount: number): boolean {
@@ -173,7 +227,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return false;
   }
 
-  /** Apply a passive upgrade */
   applyPassive(passiveId: string, level: number): void {
     switch (passiveId) {
       case 'armor': this.armorReduction = level * 0.05; break;

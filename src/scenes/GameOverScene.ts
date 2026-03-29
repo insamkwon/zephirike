@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getGold } from '../config/metaConfig';
-import { TEXT_STYLES } from '../config/styles';
+import { TEXT_STYLES, FONT_FAMILY } from '../config/styles';
+import { drawGlassPanel, drawPillButton } from '../ui/UIHelpers';
 
 interface GameOverData {
   victory: boolean;
@@ -9,7 +10,7 @@ interface GameOverData {
   level: number;
   gold: number;
   weapons: string[];
-  dpsHistory?: number[];  // DPS samples every 30s
+  dpsHistory?: number[];
   peakDps?: number;
   damageTaken?: number;
 }
@@ -20,18 +21,37 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(data: GameOverData): void {
-    const cx = this.cameras.main.width / 2;
-    const h = this.cameras.main.height;
-    this.cameras.main.setBackgroundColor('#0a0a1a');
+    const cam = this.cameras.main;
+    const cx = cam.width / 2;
+    const h = cam.height;
+    cam.setBackgroundColor('#1a2a1a');
+    cam.fadeIn(400, 0, 0, 0);
 
-    const titleColor = data.victory ? '#44ff44' : '#ff4444';
+    try { cam.postFX.addVignette(0.5, 0.5, 0.88, 0.2); } catch {}
+
+    const baseY = Math.max(30, (h - 480) / 2);
+
+    // Title — big, bright
+    const titleColor = data.victory ? '#FFD700' : '#FF4444';
     const titleText = data.victory ? 'VICTORY!' : 'GAME OVER';
-    this.add.text(cx, 45, titleText, { ...TEXT_STYLES.title, color: titleColor }).setOrigin(0.5);
+    const title = this.add.text(cx, baseY, titleText, {
+      ...TEXT_STYLES.title, color: titleColor, fontSize: '48px',
+    }).setOrigin(0.5).setScale(0).setAlpha(0);
+    this.tweens.add({
+      targets: title, scale: 1, alpha: 1,
+      duration: 500, ease: 'Back.easeOut',
+    });
+    const glowColor = data.victory ? 0xFFD700 : 0xFF4444;
+    try { title.preFX?.addGlow(glowColor, 3, 0, false, 0.08, 10); } catch {}
 
-    const subtitle = data.victory ? 'You survived the night!' : 'The darkness consumed you...';
-    this.add.text(cx, 88, subtitle, { ...TEXT_STYLES.caption }).setOrigin(0.5);
+    const subtitle = data.victory ? 'You survived!' : 'Better luck next time...';
+    const subText = this.add.text(cx, baseY + 52, subtitle, {
+      fontSize: '15px', fontFamily: FONT_FAMILY, fontStyle: '600',
+      color: '#b0c4de',
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: subText, alpha: 1, duration: 300, delay: 200 });
 
-    // Stats grid
+    // Stats
     const stats = [
       ['Time', data.time],
       ['Level', `${data.level}`],
@@ -42,78 +62,151 @@ export class GameOverScene extends Phaser.Scene {
     if (data.peakDps) stats.push(['Peak Kill Rate', `${data.peakDps}/30s`]);
     if (data.damageTaken) stats.push(['Damage Taken', `${data.damageTaken}`]);
 
-    let sy = 115;
-    for (const [label, value] of stats) {
-      this.add.text(cx - 100, sy, label, { ...TEXT_STYLES.caption, color: '#888888' }).setOrigin(0, 0.5);
-      this.add.text(cx + 100, sy, value, { ...TEXT_STYLES.body, fontSize: '13px' }).setOrigin(1, 0.5);
-      sy += 22;
-    }
+    // Glass panel behind stats
+    const panelH = stats.length * 32 + 30;
+    const panelY = baseY + 90 + panelH / 2;
+    const statsPanel = this.add.graphics().setAlpha(0);
+    drawGlassPanel(statsPanel, cx, panelY, 400, panelH, 16, 0.75);
+    this.tweens.add({ targets: statsPanel, alpha: 1, duration: 250, delay: 250 });
 
-    // DPS graph (if data available)
+    let sy = baseY + 100;
+    stats.forEach(([label, value], i) => {
+      const labelObj = this.add.text(cx - 150, sy, label, {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '500',
+        color: '#b0c4de',
+      }).setOrigin(0, 0.5).setAlpha(0);
+
+      const isGold = label === 'Gold Earned' || label === 'Total Gold';
+      const valueColor = isGold ? '#FFD700' : '#ffffff';
+      const valueObj = this.add.text(cx + 150, sy, value, {
+        fontSize: '16px', fontFamily: FONT_FAMILY, fontStyle: '700',
+        color: valueColor,
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(1, 0.5).setAlpha(0);
+
+      labelObj.setX(cx - 170);
+      valueObj.setX(cx + 170);
+      this.tweens.add({
+        targets: labelObj, alpha: 1, x: cx - 150,
+        duration: 250, delay: 300 + i * 50, ease: 'Cubic.easeOut',
+      });
+      this.tweens.add({
+        targets: valueObj, alpha: 1, x: cx + 150,
+        duration: 250, delay: 300 + i * 50, ease: 'Cubic.easeOut',
+      });
+
+      sy += 32;
+    });
+
+    const sepDelay = 300 + stats.length * 50;
+    sy += 10;
+
+    // DPS graph
     if (data.dpsHistory && data.dpsHistory.length > 1) {
-      this.drawDpsGraph(cx, sy + 15, 300, 80, data.dpsHistory);
-      sy += 110;
+      this.time.delayedCall(sepDelay + 100, () => {
+        this.drawDpsGraph(cx, sy, 370, 90, data.dpsHistory!);
+      });
+      sy += 125;
     }
 
-    // Weapons
+    // Weapons build summary
     if (data.weapons.length > 0) {
-      this.add.text(cx, sy, 'Build:', { ...TEXT_STYLES.caption, color: '#888888' }).setOrigin(0.5);
-      sy += 18;
-      this.add.text(cx, sy, data.weapons.join('  '), {
-        fontSize: '11px', fontFamily: 'monospace', color: '#aaaaaa',
-      }).setOrigin(0.5);
+      const buildLabel = this.add.text(cx, sy, 'Build:', {
+        fontSize: '14px', fontFamily: FONT_FAMILY, fontStyle: '600',
+        color: '#b0c4de',
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: buildLabel, alpha: 1, duration: 200, delay: sepDelay + 200 });
+      sy += 24;
+
+      const buildText = this.add.text(cx, sy, data.weapons.join('  '), {
+        fontSize: '13px', fontFamily: FONT_FAMILY, fontStyle: '500', color: '#b0c4de',
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: buildText, alpha: 1, duration: 200, delay: sepDelay + 250 });
     }
 
-    // Actions
-    this.add.text(cx, h - 50, 'Press ENTER to Continue', {
-      ...TEXT_STYLES.body, color: '#44ddff',
+    // Continue button — bright green pill
+    const actionY = h - 55;
+    const btnBg = this.add.graphics();
+    drawPillButton(btnBg, cx, actionY, 240, 42, 0x44BB44, 0.9);
+    btnBg.setAlpha(0);
+    this.tweens.add({ targets: btnBg, alpha: 1, duration: 300, delay: sepDelay + 400 });
+
+    const actionText = this.add.text(cx, actionY, 'Continue', {
+      fontSize: '18px', fontFamily: FONT_FAMILY, fontStyle: '800',
+      color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({
+      targets: actionText, alpha: 1, duration: 300, delay: sepDelay + 400,
+      onComplete: () => {
+        this.tweens.add({
+          targets: [actionText, btnBg], scale: { from: 1, to: 1.05 },
+          yoyo: true, repeat: -1, duration: 800, ease: 'Sine.easeInOut',
+        });
+      },
+    });
+
+    this.add.text(cx, h - 26, 'Spend gold on upgrades in the menu!', {
+      fontSize: '12px', fontFamily: FONT_FAMILY, fontStyle: '500',
+      color: '#708090',
     }).setOrigin(0.5);
 
-    this.add.text(cx, h - 28, 'Spend gold on upgrades in the menu!', {
-      ...TEXT_STYLES.caption, color: '#555555',
-    }).setOrigin(0.5);
+    this.input.keyboard!.on('keydown-ENTER', () => this.goToMenu());
+    this.input.keyboard!.on('keydown-SPACE', () => this.goToMenu());
+    this.input.once('pointerdown', () => this.goToMenu());
+  }
 
-    this.input.keyboard!.on('keydown-ENTER', () => this.scene.start('MenuScene'));
-    this.input.keyboard!.on('keydown-SPACE', () => this.scene.start('MenuScene'));
-    this.input.once('pointerdown', () => this.scene.start('MenuScene'));
+  private goToMenu(): void {
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('MenuScene');
+    });
   }
 
   private drawDpsGraph(cx: number, y: number, w: number, graphH: number, dps: number[]): void {
     const x = cx - w / 2;
     const maxDps = Math.max(...dps, 1);
 
-    // Background
-    this.add.rectangle(cx, y + graphH / 2, w, graphH, 0x111122, 0.5);
+    const bg = this.add.graphics();
+    drawGlassPanel(bg, cx, y + graphH / 2, w + 20, graphH + 30, 12, 0.5);
 
-    // Label
-    this.add.text(cx, y - 8, 'DPS Over Time', {
-      fontSize: '10px', fontFamily: 'monospace', color: '#666666',
+    this.add.text(cx, y - 10, 'Kill Rate Over Time', {
+      fontSize: '11px', fontFamily: FONT_FAMILY, fontStyle: '600', color: '#708090',
     }).setOrigin(0.5);
 
-    // Draw bars
-    const barW = Math.max(2, (w - 10) / dps.length - 1);
+    const barW = Math.max(3, (w - 10) / dps.length - 1);
     for (let i = 0; i < dps.length; i++) {
       const barH = (dps[i] / maxDps) * (graphH - 10);
       const bx = x + 5 + i * ((w - 10) / dps.length);
-      const by = y + graphH - 5 - barH;
+      const by = y + graphH - 5;
 
       const intensity = dps[i] / maxDps;
+      // Green → Orange gradient based on intensity
       const color = Phaser.Display.Color.GetColor(
-        Math.floor(100 + 155 * intensity),
-        Math.floor(100 + 100 * (1 - intensity)),
-        100
+        Math.floor(80 + 175 * intensity),
+        Math.floor(180 - 80 * intensity),
+        Math.floor(50 + 50 * intensity),
       );
 
-      this.add.rectangle(bx + barW / 2, by + barH / 2, barW, barH, color, 0.8);
+      const barGfx = this.add.graphics();
+      const targetH = barH;
+      this.tweens.addCounter({
+        from: 0, to: targetH, duration: 300, delay: i * 30, ease: 'Cubic.easeOut',
+        onUpdate: (tween) => {
+          const currentH = tween.getValue() as number;
+          barGfx.clear();
+          barGfx.fillStyle(color, 0.9);
+          barGfx.fillRoundedRect(bx, by - currentH, barW, currentH, 2);
+        },
+      });
     }
 
-    // Axis labels
     this.add.text(x, y + graphH + 2, '0:00', {
-      fontSize: '8px', fontFamily: 'monospace', color: '#555555',
+      fontSize: '9px', fontFamily: FONT_FAMILY, color: '#708090',
     });
     const totalMin = dps.length * 0.5;
     this.add.text(x + w, y + graphH + 2, `${totalMin.toFixed(0)}:00`, {
-      fontSize: '8px', fontFamily: 'monospace', color: '#555555',
+      fontSize: '9px', fontFamily: FONT_FAMILY, color: '#708090',
     }).setOrigin(1, 0);
   }
 }

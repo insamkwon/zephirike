@@ -2,21 +2,21 @@ import Phaser from 'phaser';
 import { Player } from '../entities/Player';
 import { EnemyPool } from '../systems/EnemyPool';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../config/constants';
+// Minimap colors defined inline for performance
 
-const MAP_SIZE = 100;
-const MAP_MARGIN = 10;
+const MAP_SIZE = 110;
+const MAP_MARGIN = 12;
+const MAP_RADIUS = 10;
 const MAP_SCALE_X = MAP_SIZE / WORLD_WIDTH;
 const MAP_SCALE_Y = MAP_SIZE / WORLD_HEIGHT;
 
-/**
- * Corner minimap showing player, enemies, and bosses on the world.
- */
 export class Minimap {
   private scene: Phaser.Scene;
   private player: Player;
   private enemyPool: EnemyPool;
-  private graphics: Phaser.GameObjects.Graphics;
-  private bg: Phaser.GameObjects.Rectangle;
+  private bgGraphics: Phaser.GameObjects.Graphics;
+  private dotGraphics: Phaser.GameObjects.Graphics;
+  private bossPulseTimer = 0;
 
   constructor(scene: Phaser.Scene, player: Player, enemyPool: EnemyPool) {
     this.scene = scene;
@@ -27,58 +27,71 @@ export class Minimap {
     const x = cam.width - MAP_SIZE - MAP_MARGIN;
     const y = cam.height - MAP_SIZE - MAP_MARGIN;
 
-    this.bg = scene.add.rectangle(
-      x + MAP_SIZE / 2, y + MAP_SIZE / 2,
-      MAP_SIZE, MAP_SIZE, 0x000000, 0.5
-    ).setScrollFactor(0).setDepth(90);
-    this.bg.setStrokeStyle(1, 0x444466);
+    // Semi-transparent dark background
+    this.bgGraphics = scene.add.graphics().setScrollFactor(0).setDepth(90);
+    this.bgGraphics.fillStyle(0x1a2a20, 0.6);
+    this.bgGraphics.fillRoundedRect(x, y, MAP_SIZE, MAP_SIZE, MAP_RADIUS);
+    this.bgGraphics.lineStyle(1.5, 0xffffff, 0.1);
+    this.bgGraphics.strokeRoundedRect(x, y, MAP_SIZE, MAP_SIZE, MAP_RADIUS);
 
-    this.graphics = scene.add.graphics();
-    this.graphics.setScrollFactor(0).setDepth(91);
+    // Dot rendering layer with mask
+    this.dotGraphics = scene.add.graphics().setScrollFactor(0).setDepth(91);
+    const maskShape = scene.make.graphics({ x: 0, y: 0 });
+    maskShape.fillStyle(0xffffff);
+    maskShape.fillRoundedRect(x, y, MAP_SIZE, MAP_SIZE, MAP_RADIUS);
+    this.dotGraphics.setMask(maskShape.createGeometryMask());
   }
 
   update(): void {
-    this.graphics.clear();
+    this.dotGraphics.clear();
+    this.bossPulseTimer += 16;
 
     const cam = this.scene.cameras.main;
     const ox = cam.width - MAP_SIZE - MAP_MARGIN;
     const oy = cam.height - MAP_SIZE - MAP_MARGIN;
 
-    // Draw enemies as dots
+    // Enemies
     const enemies = this.enemyPool.getLiving();
     for (const enemy of enemies) {
       const mx = ox + enemy.x * MAP_SCALE_X;
       const my = oy + enemy.y * MAP_SCALE_Y;
 
+      if (mx < ox || mx > ox + MAP_SIZE || my < oy || my > oy + MAP_SIZE) continue;
+
       if (enemy.enemyDef.isBoss) {
-        this.graphics.fillStyle(0xff0000, 1);
-        this.graphics.fillCircle(mx, my, 3);
+        const pulseSize = 3.5 + Math.sin(this.bossPulseTimer * 0.006) * 1.5;
+        this.dotGraphics.fillStyle(0xFF4444, 1);
+        this.dotGraphics.fillCircle(mx, my, pulseSize);
+        this.dotGraphics.fillStyle(0xFF4444, 0.2);
+        this.dotGraphics.fillCircle(mx, my, pulseSize + 2);
       } else if (enemy.isElite) {
-        this.graphics.fillStyle(0xffdd44, 1);
-        this.graphics.fillCircle(mx, my, 2);
+        this.dotGraphics.fillStyle(0xFFD700, 0.9);
+        this.dotGraphics.fillCircle(mx, my, 2);
       } else {
-        this.graphics.fillStyle(0xff4444, 0.6);
-        this.graphics.fillRect(mx, my, 1, 1);
+        this.dotGraphics.fillStyle(0xFF6644, 0.5);
+        this.dotGraphics.fillRect(mx - 0.5, my - 0.5, 1.5, 1.5);
       }
     }
 
-    // Draw player
+    // Player — bright green
     const px = ox + this.player.x * MAP_SCALE_X;
     const py = oy + this.player.y * MAP_SCALE_Y;
-    this.graphics.fillStyle(0x44ff44, 1);
-    this.graphics.fillCircle(px, py, 3);
+    this.dotGraphics.fillStyle(0x66DD66, 0.3);
+    this.dotGraphics.fillCircle(px, py, 5);
+    this.dotGraphics.fillStyle(0x66DD66, 1);
+    this.dotGraphics.fillCircle(px, py, 2.5);
 
-    // Camera viewport outline
+    // Camera viewport
     const vx = ox + cam.scrollX * MAP_SCALE_X;
     const vy = oy + cam.scrollY * MAP_SCALE_Y;
     const vw = cam.width * MAP_SCALE_X;
     const vh = cam.height * MAP_SCALE_Y;
-    this.graphics.lineStyle(1, 0x44ddff, 0.4);
-    this.graphics.strokeRect(vx, vy, vw, vh);
+    this.dotGraphics.lineStyle(1, 0xffffff, 0.3);
+    this.dotGraphics.strokeRect(vx, vy, vw, vh);
   }
 
   destroy(): void {
-    this.bg.destroy();
-    this.graphics.destroy();
+    this.bgGraphics.destroy();
+    this.dotGraphics.destroy();
   }
 }
